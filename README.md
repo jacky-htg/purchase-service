@@ -15,9 +15,9 @@ Purchase service using golang grpc and postgresql.
 - You can test the service using grpc client like wombat or grpcurl
 
 ## Features
-[ ] Suppliers
-[ ] Purchases
-[ ] Purchase Returns
+- [ ] Suppliers
+- [ ] Purchases
+- [ ] Purchase Returns
 
 ## How To Contribute
 - Give star or clone and fork the repository
