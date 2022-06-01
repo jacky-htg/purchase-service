@@ -6,7 +6,7 @@ option java_package = "com.wiradata.erpapplication.purchases";
 option java_multiple_files = true;
 
 import "purchases/purchase_message.proto";
-import "generics/generic_message.proto";
+import "purchases/generic_message.proto";
 
 message ListPurchaseRequest {
   Pagination pagination = 1;
