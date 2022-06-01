@@ -2,7 +2,7 @@ init:
 	go mod init purchase
 	
 gen:
-	protoc --proto_path=proto --go_out=paths=source_relative,plugins=grpc:./pb proto/*/*.proto
+	protoc --proto_path=proto --go_out=paths=source_relative,:./pb --go-grpc_out=paths=source_relative,:./pb proto/*/*.proto
 	
 migrate:
 	go run cmd/cli.go migrate
