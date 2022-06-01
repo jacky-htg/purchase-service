@@ -9,15 +9,10 @@ import (
 var migrations = []darwin.Migration{
 	{
 		Version:     1,
-		Description: "add uuid extension",
-		Script:      `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`,
-	},
-	{
-		Version:     2,
 		Description: "Add Suppliers",
 		Script: `
 		CREATE TABLE suppliers (
-			id uuid NOT NULL DEFAULT uuid_generate_v1() PRIMARY KEY,
+			id uuid NOT NULL PRIMARY KEY,
 			company_id uuid NOT NULL,
 			code CHAR(10) NOT NULL,
 			name VARCHAR(45) NOT NULL UNIQUE,
@@ -31,11 +26,11 @@ var migrations = []darwin.Migration{
 		);`,
 	},
 	{
-		Version:     3,
+		Version:     2,
 		Description: "Add Purchases",
 		Script: `
 		CREATE TABLE purchases (
-			id uuid NOT NULL DEFAULT uuid_generate_v1() PRIMARY KEY,
+			id uuid NOT NULL PRIMARY KEY,
 			company_id	uuid NOT NULL,
 			branch_id uuid NOT NULL,
 			branch_name varchar(100) NOT NULL,
@@ -52,11 +47,11 @@ var migrations = []darwin.Migration{
 		);`,
 	},
 	{
-		Version:     4,
+		Version:     3,
 		Description: "Add Purchase Details",
 		Script: `
 		CREATE TABLE purchase_details (
-			id uuid NOT NULL DEFAULT uuid_generate_v1() PRIMARY KEY,
+			id uuid NOT NULL PRIMARY KEY,
 			purchase_id	uuid NOT NULL,
 			product_id uuid NOT NULL,
 			quantity INT NOT NULL CHECK (quantity > 0),
@@ -64,11 +59,11 @@ var migrations = []darwin.Migration{
 		);`,
 	},
 	{
-		Version:     5,
+		Version:     4,
 		Description: "Add Purchase Return",
 		Script: `
 		CREATE TABLE purchase_returns (
-			id uuid NOT NULL DEFAULT uuid_generate_v1() PRIMARY KEY,
+			id uuid NOT NULL PRIMARY KEY,
 			company_id	uuid NOT NULL,
 			branch_id uuid NOT NULL,
 			branch_name varchar(100) NOT NULL,
@@ -85,11 +80,11 @@ var migrations = []darwin.Migration{
 		);`,
 	},
 	{
-		Version:     6,
+		Version:     5,
 		Description: "Add Purchase Return Details",
 		Script: `
 		CREATE TABLE purchase_return_details (
-			id uuid NOT NULL DEFAULT uuid_generate_v1() PRIMARY KEY,
+			id uuid NOT NULL PRIMARY KEY,
 			purchase_return_id	uuid NOT NULL,
 			product_id uuid NOT NULL,
 			quantity INT NOT NULL CHECK (quantity > 0),
