@@ -16,8 +16,8 @@ Purchase service using golang grpc and postgresql.
 
 ## Features
 - [ ] Suppliers
-- [ ] Purchases
-- [ ] Purchase Returns
+- [X] Purchases
+- [X] Purchase Returns
 
 ## How To Contribute
 - Give star or clone and fork the repository
