@@ -17,6 +17,5 @@
 # vendor/
 .env
 
-go.mod
 go.sum
 pb
