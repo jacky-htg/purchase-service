@@ -1,0 +1,32 @@
+syntax = "proto3";
+package purchases;
+
+option go_package = "pb/purchases;purchases";
+option java_package = "com.wiradata.erpapplication.purchases";
+option java_multiple_files = true;
+
+import "purchases/supplier_message.proto";
+
+message Purchase {
+  string id = 1;
+  string branch_id = 3;
+  string branch_name = 4;
+  Supplier supplier = 5;
+  string code = 6;
+  string purchase_date = 7;
+  string remark = 8;
+  string created_at = 9;
+  string created_by = 10;
+  string updated_at = 11;
+  string updated_by = 12;
+  repeated PurchaseDetail details = 13;
+}
+
+message PurchaseDetail {
+  string id = 1;
+  string purchase_id = 2;
+  string product_id = 3;
+  string product_code = 4;
+  string product_name = 5;
+  int32 qty = 6;
+}
