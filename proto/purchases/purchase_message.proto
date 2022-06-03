@@ -9,17 +9,20 @@ import "purchases/supplier_message.proto";
 
 message Purchase {
   string id = 1;
-  string branch_id = 3;
-  string branch_name = 4;
-  Supplier supplier = 5;
-  string code = 6;
-  string purchase_date = 7;
-  string remark = 8;
-  string created_at = 9;
-  string created_by = 10;
-  string updated_at = 11;
-  string updated_by = 12;
-  repeated PurchaseDetail details = 13;
+  string branch_id = 2;
+  string branch_name = 3;
+  Supplier supplier = 4;
+  string code = 5;
+  string purchase_date = 6;
+  double price = 7;
+  double additional_disc_amount = 8;
+  float additional_disc_prosentation = 9;
+  string remark = 10;
+  string created_at = 11;
+  string created_by = 12;
+  string updated_at = 13;
+  string updated_by = 14;
+  repeated PurchaseDetail details = 15;
 }
 
 message PurchaseDetail {
@@ -29,4 +32,7 @@ message PurchaseDetail {
   string product_code = 4;
   string product_name = 5;
   int32 qty = 6;
+  double price = 7;
+  double disc_amount = 8;
+  float disc_prosentation = 9;
 }

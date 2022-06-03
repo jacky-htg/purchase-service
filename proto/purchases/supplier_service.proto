@@ -14,7 +14,7 @@ message ListSupplierRequest {
 
 message SupplierPaginationResponse {
   Pagination pagination = 1;
-  uint32 count = 4;
+  uint32 count = 2;
 }
 
 message ListSupplierResponse {
