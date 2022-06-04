@@ -72,6 +72,10 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 			}
 		}
 
+		if detail.DiscProsentation > 0 {
+			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscProsentation) / 100
+		}
+
 		sumPrice += detail.GetPrice()
 	}
 
@@ -91,6 +95,10 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
+	additionalDiscAmount := in.GetAdditionalDiscAmount()
+	if in.GetAdditionalDiscProsentation() > 0 {
+		additionalDiscAmount = sumPrice * float64(in.GetAdditionalDiscProsentation()) / 100
+	}
 	purchaseModel.Pb = purchases.Purchase{
 		BranchId:                   in.GetBranchId(),
 		BranchName:                 mBranch.Pb.GetName(),
@@ -99,7 +107,7 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		Supplier:                   in.GetSupplier(),
 		Remark:                     in.GetRemark(),
 		Price:                      sumPrice,
-		AdditionalDiscAmount:       in.GetAdditionalDiscAmount(),
+		AdditionalDiscAmount:       additionalDiscAmount,
 		AdditionalDiscProsentation: in.GetAdditionalDiscProsentation(),
 		Details:                    in.GetDetails(),
 	}
@@ -179,6 +187,10 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		if len(in.GetRemark()) > 0 {
 			purchaseModel.Pb.Remark = in.GetRemark()
 		}
+
+		if in.GetAdditionalDiscProsentation() > 0 {
+			purchaseModel.Pb.AdditionalDiscProsentation = in.AdditionalDiscProsentation
+		}
 	}
 
 	tx, err := u.Db.BeginTx(ctx, nil)
@@ -214,6 +226,7 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			for index, data := range purchaseModel.Pb.GetDetails() {
 				if data.GetId() == detail.GetId() {
 					purchaseModel.Pb.Details = append(purchaseModel.Pb.Details[:index], purchaseModel.Pb.Details[index+1:]...)
+					// TODO : operasi update detail
 					break
 				}
 			}
@@ -228,6 +241,10 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 				DiscAmount:       detail.GetDiscAmount(),
 				DiscProsentation: detail.GetDiscProsentation(),
 			}}
+
+			if purchaseDetailModel.Pb.GetDiscProsentation() > 0 {
+				purchaseDetailModel.Pb.DiscAmount = purchaseDetailModel.Pb.Price * float64(purchaseDetailModel.Pb.DiscProsentation) / 100
+			}
 			purchaseDetailModel.PbPurchase = purchases.Purchase{
 				Id:           purchaseModel.Pb.Id,
 				BranchId:     purchaseModel.Pb.BranchId,
@@ -266,6 +283,10 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	purchaseModel.Pb.Price = sumPrice
+	if purchaseModel.Pb.AdditionalDiscProsentation > 0 {
+		purchaseModel.Pb.AdditionalDiscAmount = sumPrice * float64(purchaseModel.Pb.AdditionalDiscProsentation) / 100
+	}
+
 	err = purchaseModel.Update(ctx, tx)
 	if err != nil {
 		tx.Rollback()

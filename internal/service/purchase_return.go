@@ -50,13 +50,14 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	// TODO : validate not any receiving order yet
 
 	// TODO : validate outstanding purchase
-	// 1. not
 
 	for _, detail := range in.GetDetails() {
 		// product validation
 		if len(detail.GetProductId()) == 0 {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
+
+		// TODO : validate outstanding purchase details
 
 		// TODO : call product from inventory grpc
 		detail.ProductCode = ""
@@ -184,6 +185,8 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 		// TODO : CALL GRPC PRODUCT FROM INVENTORY SERVICE
 		detail.ProductCode = ""
 		detail.ProductName = ""
+
+		// TODO : validation outstanding purchase detail
 
 		if len(detail.GetId()) > 0 {
 			// operasi update
