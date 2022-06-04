@@ -295,21 +295,6 @@ func (u *Purchase) Update(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-func (u *Purchase) Delete(ctx context.Context, db *sql.DB) error {
-	stmt, err := db.PrepareContext(ctx, `DELETE FROM purchases WHERE id = $1`)
-	if err != nil {
-		return status.Errorf(codes.Internal, "Prepare delete purchase: %v", err)
-	}
-	defer stmt.Close()
-
-	_, err = stmt.ExecContext(ctx, u.Pb.GetId())
-	if err != nil {
-		return status.Errorf(codes.Internal, "Exec delete purchase: %v", err)
-	}
-
-	return nil
-}
-
 func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.ListPurchaseRequest) (string, []interface{}, *purchases.PurchasePaginationResponse, error) {
 	var paginationResponse purchases.PurchasePaginationResponse
 	query := `SELECT id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, price, additional_disc_amount, additional_disc_prosentation, created_at, created_by, updated_at, updated_by FROM purchases`

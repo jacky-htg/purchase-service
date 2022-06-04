@@ -24,7 +24,7 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	var purchaseReturnModel model.PurchaseReturn
 	var err error
 
-	// TODO : if this month any closing stock, create transaction for thus month will be blocked
+	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
 	// basic validation
 	{
@@ -45,6 +45,11 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
+
+	// TODO : validate not any receiving order
+
+	// TODO : validate outstanding purchase
+	// 1. not
 
 	for _, detail := range in.GetDetails() {
 		// product validation

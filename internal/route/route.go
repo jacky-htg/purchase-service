@@ -14,11 +14,12 @@ import (
 // GrpcRoute func
 func GrpcRoute(grpcServer *grpc.Server, db *sql.DB, log *logrus.Entry, userConn *grpc.ClientConn, inventoryConn *grpc.ClientConn) {
 	purchaseServer := service.Purchase{
-		Db:            db,
-		UserClient:    users.NewUserServiceClient((userConn)),
-		RegionClient:  users.NewRegionServiceClient(userConn),
-		BranchClient:  users.NewBranchServiceClient(userConn),
-		ProductClient: inventories.NewProductServiceClient(inventoryConn),
+		Db:              db,
+		UserClient:      users.NewUserServiceClient((userConn)),
+		RegionClient:    users.NewRegionServiceClient(userConn),
+		BranchClient:    users.NewBranchServiceClient(userConn),
+		ProductClient:   inventories.NewProductServiceClient(inventoryConn),
+		ReceivingClient: inventories.NewReceiveServiceClient(inventoryConn),
 	}
 	purchases.RegisterPurchaseServiceServer(grpcServer, &purchaseServer)
 

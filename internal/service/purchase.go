@@ -15,11 +15,12 @@ import (
 )
 
 type Purchase struct {
-	Db            *sql.DB
-	UserClient    users.UserServiceClient
-	RegionClient  users.RegionServiceClient
-	BranchClient  users.BranchServiceClient
-	ProductClient inventories.ProductServiceClient
+	Db              *sql.DB
+	UserClient      users.UserServiceClient
+	RegionClient    users.RegionServiceClient
+	BranchClient    users.BranchServiceClient
+	ProductClient   inventories.ProductServiceClient
+	ReceivingClient inventories.ReceiveServiceClient
 	purchases.UnimplementedPurchaseServiceServer
 }
 
@@ -126,11 +127,18 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 				Purchase: &purchases.Purchase{Id: in.GetId()},
 			},
 		}
-		if anyReturn, err := purchaseReturnModel.HasReturn(ctx, u.Db); err != nil {
+		if hasReturn, err := purchaseReturnModel.HasReturn(ctx, u.Db); err != nil {
 			return &purchaseModel.Pb, err
-		} else if anyReturn {
+		} else if hasReturn {
 			return &purchaseModel.Pb, status.Error(codes.PermissionDenied, "Can not updated because the purchase has return transaction")
 		}
+	}
+
+	// if any receiving transaction, do update will be blocked
+	if hasReceive, err := hasReceiveTransaction(ctx, u.ReceivingClient, in.GetId()); err != nil {
+		return &purchaseModel.Pb, err
+	} else if hasReceive {
+		return &purchaseModel.Pb, status.Error(codes.PermissionDenied, "Can not updated because the purchase has receiving transaction")
 	}
 
 	ctx, err = getMetadata(ctx)

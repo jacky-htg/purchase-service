@@ -169,3 +169,15 @@ func getProduct(ctx context.Context, productClient inventories.ProductServiceCli
 
 	return product, nil
 }
+
+func hasReceiveTransaction(ctx context.Context, receiveClient inventories.ReceiveServiceClient, id string) (bool, error) {
+	/* anyReceive, err := receiveClient.HasReceive(setMetadata(ctx), &inventories.Id{Id: id})
+	if err != nil {
+		// TODO : set status error only if respone status error from product service is 'unknow'
+		return false, status.Errorf(codes.Internal, "Error when calling receive service: %v", err)
+	}
+
+	return anyReceive, nil */
+
+	return false, nil
+}
