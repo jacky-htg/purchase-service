@@ -226,39 +226,51 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			for index, data := range purchaseModel.Pb.GetDetails() {
 				if data.GetId() == detail.GetId() {
 					purchaseModel.Pb.Details = append(purchaseModel.Pb.Details[:index], purchaseModel.Pb.Details[index+1:]...)
-					// TODO : operasi update detail
+					// update detail
+					if detail.Price > 0 {
+						data.Price = detail.Price
+					}
+
+					if detail.DiscAmount > 0 {
+						data.DiscAmount = detail.DiscAmount
+					}
+
+					if detail.Qty > 0 {
+						data.Qty = detail.Qty
+					}
+
+					if detail.DiscProsentation > 0 {
+						data.DiscProsentation = detail.DiscProsentation
+						data.DiscAmount = data.Price * float64(data.DiscProsentation) / 100
+					}
+
+					var purchaseDetailModel model.PurchaseDetail
+					purchaseDetailModel.SetPbFromPointer(data)
+					if err := purchaseDetailModel.Update(ctx, tx); err != nil {
+						tx.Rollback()
+						return &purchaseModel.Pb, err
+					}
 					break
 				}
 			}
 		} else {
 			// operasi insert
-			purchaseDetailModel := model.PurchaseDetail{Pb: purchases.PurchaseDetail{
-				PurchaseId:       purchaseModel.Pb.GetId(),
-				ProductId:        detail.ProductId,
-				ProductCode:      mProduct.Pb.GetCode(),
-				ProductName:      mProduct.Pb.GetName(),
-				Price:            detail.GetPrice(),
-				DiscAmount:       detail.GetDiscAmount(),
-				DiscProsentation: detail.GetDiscProsentation(),
-			}}
+			purchaseDetailModel := model.PurchaseDetail{
+				Pb: purchases.PurchaseDetail{
+					PurchaseId:       purchaseModel.Pb.GetId(),
+					ProductId:        detail.ProductId,
+					ProductCode:      mProduct.Pb.GetCode(),
+					ProductName:      mProduct.Pb.GetName(),
+					Price:            detail.GetPrice(),
+					DiscAmount:       detail.GetDiscAmount(),
+					DiscProsentation: detail.GetDiscProsentation(),
+				},
+			}
 
 			if purchaseDetailModel.Pb.GetDiscProsentation() > 0 {
 				purchaseDetailModel.Pb.DiscAmount = purchaseDetailModel.Pb.Price * float64(purchaseDetailModel.Pb.DiscProsentation) / 100
 			}
-			purchaseDetailModel.PbPurchase = purchases.Purchase{
-				Id:           purchaseModel.Pb.Id,
-				BranchId:     purchaseModel.Pb.BranchId,
-				BranchName:   purchaseModel.Pb.BranchName,
-				Supplier:     purchaseModel.Pb.GetSupplier(),
-				Code:         purchaseModel.Pb.Code,
-				PurchaseDate: purchaseModel.Pb.PurchaseDate,
-				Remark:       purchaseModel.Pb.Remark,
-				CreatedAt:    purchaseModel.Pb.CreatedAt,
-				CreatedBy:    purchaseModel.Pb.CreatedBy,
-				UpdatedAt:    purchaseModel.Pb.UpdatedAt,
-				UpdatedBy:    purchaseModel.Pb.UpdatedBy,
-				Details:      purchaseModel.Pb.Details,
-			}
+
 			err = purchaseDetailModel.Create(ctx, tx)
 			if err != nil {
 				tx.Rollback()

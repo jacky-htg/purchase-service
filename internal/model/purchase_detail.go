@@ -19,7 +19,7 @@ type PurchaseDetail struct {
 
 func (u *PurchaseDetail) Get(ctx context.Context, tx *sql.Tx) error {
 	query := `
-		SELECT purchase_details.id, purchases.company_id, purchase_details.purchase_id, purchase_details.product_id, price, disc_amount, disc_prosentation 
+		SELECT purchase_details.id, purchases.company_id, purchase_details.purchase_id, purchase_details.product_id, price, disc_amount, disc_prosentation, qty 
 		FROM purchase_details 
 		JOIN purchases ON purchase_details.purchase_id = purchases.id
 		WHERE purchase_details.id = $1 AND purchase_details.purchase_id = $2
@@ -34,7 +34,7 @@ func (u *PurchaseDetail) Get(ctx context.Context, tx *sql.Tx) error {
 	var companyID string
 	var discProsentation *float32
 	err = stmt.QueryRowContext(ctx, u.Pb.GetId(), u.Pb.GetPurchaseId()).Scan(
-		&u.Pb.Id, &companyID, &u.Pb.PurchaseId, &u.Pb.ProductId, &u.Pb.Price, &u.Pb.DiscAmount, &discProsentation,
+		&u.Pb.Id, &companyID, &u.Pb.PurchaseId, &u.Pb.ProductId, &u.Pb.Price, &u.Pb.DiscAmount, &discProsentation, &u.Pb.Qty,
 	)
 
 	if err == sql.ErrNoRows {
@@ -61,8 +61,8 @@ func (u *PurchaseDetail) Get(ctx context.Context, tx *sql.Tx) error {
 func (u *PurchaseDetail) Create(ctx context.Context, tx *sql.Tx) error {
 	u.Pb.Id = uuid.New().String()
 	query := `
-		INSERT INTO purchase_details (id, purchase_id, product_id, price, disc_amount, disc_prosentation) 
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO purchase_details (id, purchase_id, product_id, price, disc_amount, disc_prosentation, qty) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -77,6 +77,36 @@ func (u *PurchaseDetail) Create(ctx context.Context, tx *sql.Tx) error {
 		u.Pb.GetPrice(),
 		u.Pb.GetDiscAmount(),
 		u.Pb.GetDiscProsentation(),
+		u.Pb.GetQty(),
+	)
+	if err != nil {
+		return status.Errorf(codes.Internal, "Exec insert purchase detail: %v", err)
+	}
+
+	return nil
+}
+
+func (u *PurchaseDetail) Update(ctx context.Context, tx *sql.Tx) error {
+	query := `
+		UPDATE purchase_details
+		SET price = $1,
+			disc_amount = $2,
+			disc_prosentation = $3
+			qty = $4
+		WHERE id = $5
+	`
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return status.Errorf(codes.Internal, "Prepare update purchase detail: %v", err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx,
+		u.Pb.GetPrice(),
+		u.Pb.GetDiscAmount(),
+		u.Pb.GetDiscProsentation(),
+		u.Pb.GetQty(),
+		u.Pb.GetId(),
 	)
 	if err != nil {
 		return status.Errorf(codes.Internal, "Exec insert purchase detail: %v", err)
@@ -98,4 +128,18 @@ func (u *PurchaseDetail) Delete(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	return nil
+}
+
+func (u *PurchaseDetail) SetPbFromPointer(data *purchases.PurchaseDetail) {
+	u.Pb = purchases.PurchaseDetail{
+		Id:               data.GetId(),
+		PurchaseId:       data.GetPurchaseId(),
+		ProductId:        data.GetProductId(),
+		ProductCode:      data.GetProductCode(),
+		ProductName:      data.GetProductName(),
+		Price:            data.GetPrice(),
+		DiscAmount:       data.GetDiscAmount(),
+		DiscProsentation: data.GetDiscProsentation(),
+		Qty:              data.GetQty(),
+	}
 }
