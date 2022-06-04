@@ -60,7 +60,7 @@ var migrations = []darwin.Migration{
 			price DOUBLE PRECISION NOT NULL,
 			quantity INT NOT NULL CHECK (quantity > 0),
 			disc_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
-			disc_percentage REAL DEFAULT 0,
+			disc_percentage REAL NOT NULL DEFAULT 0,
 			CONSTRAINT fk_purchase_details_to_purchases FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE ON UPDATE CASCADE
 		);`,
 	},
@@ -77,7 +77,7 @@ var migrations = []darwin.Migration{
 			code	CHAR(13) NOT NULL,
 			return_date	DATE NOT NULL,
 			remark VARCHAR(255) NOT NULL,
-			price DOUBLE PRECISION NOT NULL,
+			total_price DOUBLE PRECISION NOT NULL,
 			additional_disc_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
 			additional_disc_percentage REAL NOT NULL DEFAULT 0,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW(),

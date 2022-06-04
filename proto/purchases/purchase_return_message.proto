@@ -15,9 +15,9 @@ message PurchaseReturn {
   string code = 5;
   string return_date = 6;
   string remark = 7;
-  double price = 8;
+  double total_price = 8;
   double additional_disc_amount = 9;
-  float additional_disc_prosentation = 10;
+  float additional_disc_percentage = 10;
   string created_at = 11;
   string created_by = 12;
   string updated_at = 13;
@@ -31,8 +31,8 @@ message PurchaseReturnDetail {
   string product_id = 3;
   string product_code = 4;
   string product_name = 5;
-  int32 qty = 6;
+  int32 quantity = 6;
   double price = 7;
   double disc_amount = 8;
-  float disc_prosentation = 9;
+  float disc_percentage = 9;
 }

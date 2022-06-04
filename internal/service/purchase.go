@@ -59,6 +59,7 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 
 		{
+			// TODO : Pertimbangkan untuk melakukan validasi secara bulk agar tidak looping call grpc product
 			mProduct := model.Product{
 				Client: u.ProductClient,
 				Pb:     &inventories.Product{},
@@ -72,8 +73,8 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 			}
 		}
 
-		if detail.DiscProsentation > 0 {
-			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscProsentation) / 100
+		if detail.DiscPercentage > 0 {
+			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
 		}
 
 		sumPrice += detail.GetPrice()
@@ -95,21 +96,20 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
-	additionalDiscAmount := in.GetAdditionalDiscAmount()
-	if in.GetAdditionalDiscProsentation() > 0 {
-		additionalDiscAmount = sumPrice * float64(in.GetAdditionalDiscProsentation()) / 100
+	if in.GetAdditionalDiscPercentage() > 0 {
+		in.AdditionalDiscAmount = sumPrice * float64(in.GetAdditionalDiscPercentage()) / 100
 	}
 	purchaseModel.Pb = purchases.Purchase{
-		BranchId:                   in.GetBranchId(),
-		BranchName:                 mBranch.Pb.GetName(),
-		Code:                       in.GetCode(),
-		PurchaseDate:               in.GetPurchaseDate(),
-		Supplier:                   in.GetSupplier(),
-		Remark:                     in.GetRemark(),
-		Price:                      sumPrice,
-		AdditionalDiscAmount:       additionalDiscAmount,
-		AdditionalDiscProsentation: in.GetAdditionalDiscProsentation(),
-		Details:                    in.GetDetails(),
+		BranchId:                 in.GetBranchId(),
+		BranchName:               mBranch.Pb.GetName(),
+		Code:                     in.GetCode(),
+		PurchaseDate:             in.GetPurchaseDate(),
+		Supplier:                 in.GetSupplier(),
+		Remark:                   in.GetRemark(),
+		TotalPrice:               sumPrice,
+		AdditionalDiscAmount:     in.GetAdditionalDiscAmount(),
+		AdditionalDiscPercentage: in.GetAdditionalDiscPercentage(),
+		Details:                  in.GetDetails(),
 	}
 
 	tx, err := u.Db.BeginTx(ctx, nil)
@@ -188,8 +188,8 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			purchaseModel.Pb.Remark = in.GetRemark()
 		}
 
-		if in.GetAdditionalDiscProsentation() > 0 {
-			purchaseModel.Pb.AdditionalDiscProsentation = in.AdditionalDiscProsentation
+		if in.GetAdditionalDiscPercentage() > 0 {
+			purchaseModel.Pb.AdditionalDiscPercentage = in.AdditionalDiscPercentage
 		}
 	}
 
@@ -208,6 +208,7 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
+		// TODO : pertimbangkan untuk melakukan validasi product secara bulk agar tidak looping call grpc product
 		// call grpc product
 		mProduct := model.Product{
 			Client: u.ProductClient,
@@ -235,13 +236,13 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 						data.DiscAmount = detail.DiscAmount
 					}
 
-					if detail.Qty > 0 {
-						data.Qty = detail.Qty
+					if detail.Quantity > 0 {
+						data.Quantity = detail.Quantity
 					}
 
-					if detail.DiscProsentation > 0 {
-						data.DiscProsentation = detail.DiscProsentation
-						data.DiscAmount = data.Price * float64(data.DiscProsentation) / 100
+					if detail.DiscPercentage > 0 {
+						data.DiscPercentage = detail.DiscPercentage
+						data.DiscAmount = data.Price * float64(data.DiscPercentage) / 100
 					}
 
 					var purchaseDetailModel model.PurchaseDetail
@@ -257,18 +258,18 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			// operasi insert
 			purchaseDetailModel := model.PurchaseDetail{
 				Pb: purchases.PurchaseDetail{
-					PurchaseId:       purchaseModel.Pb.GetId(),
-					ProductId:        detail.ProductId,
-					ProductCode:      mProduct.Pb.GetCode(),
-					ProductName:      mProduct.Pb.GetName(),
-					Price:            detail.GetPrice(),
-					DiscAmount:       detail.GetDiscAmount(),
-					DiscProsentation: detail.GetDiscProsentation(),
+					PurchaseId:     purchaseModel.Pb.GetId(),
+					ProductId:      detail.ProductId,
+					ProductCode:    mProduct.Pb.GetCode(),
+					ProductName:    mProduct.Pb.GetName(),
+					Price:          detail.GetPrice(),
+					DiscAmount:     detail.GetDiscAmount(),
+					DiscPercentage: detail.GetDiscPercentage(),
 				},
 			}
 
-			if purchaseDetailModel.Pb.GetDiscProsentation() > 0 {
-				purchaseDetailModel.Pb.DiscAmount = purchaseDetailModel.Pb.Price * float64(purchaseDetailModel.Pb.DiscProsentation) / 100
+			if purchaseDetailModel.Pb.GetDiscPercentage() > 0 {
+				purchaseDetailModel.Pb.DiscAmount = purchaseDetailModel.Pb.Price * float64(purchaseDetailModel.Pb.DiscPercentage) / 100
 			}
 
 			err = purchaseDetailModel.Create(ctx, tx)
@@ -294,9 +295,9 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 	}
 
-	purchaseModel.Pb.Price = sumPrice
-	if purchaseModel.Pb.AdditionalDiscProsentation > 0 {
-		purchaseModel.Pb.AdditionalDiscAmount = sumPrice * float64(purchaseModel.Pb.AdditionalDiscProsentation) / 100
+	purchaseModel.Pb.TotalPrice = sumPrice
+	if purchaseModel.Pb.AdditionalDiscPercentage > 0 {
+		purchaseModel.Pb.AdditionalDiscAmount = sumPrice * float64(purchaseModel.Pb.AdditionalDiscPercentage) / 100
 	}
 
 	err = purchaseModel.Update(ctx, tx)
@@ -363,10 +364,9 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 		var pbPurchase purchases.Purchase
 		var companyID string
 		var createdAt, updatedAt time.Time
-		var addDiscProsentation *float32
 		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName,
 			&pbPurchase.Code, &pbPurchase.PurchaseDate, &pbPurchase.Remark,
-			&pbPurchase.Price, &pbPurchase.AdditionalDiscAmount, &addDiscProsentation,
+			&pbPurchase.TotalPrice, &pbPurchase.AdditionalDiscAmount, &pbPurchase.AdditionalDiscPercentage,
 			&createdAt, &pbPurchase.CreatedBy, &updatedAt, &pbPurchase.UpdatedBy)
 		if err != nil {
 			return status.Errorf(codes.Internal, "scan data: %v", err)
@@ -374,11 +374,6 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 
 		pbPurchase.CreatedAt = createdAt.String()
 		pbPurchase.UpdatedAt = updatedAt.String()
-		if addDiscProsentation == nil {
-			pbPurchase.AdditionalDiscProsentation = 0
-		} else {
-			pbPurchase.AdditionalDiscProsentation = *addDiscProsentation
-		}
 
 		res := &purchases.ListPurchaseResponse{
 			Pagination: paginationResponse,
