@@ -74,14 +74,14 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		return &purchaseReturnModel.Pb, err
 	}
 
-	branch, err := mBranch.Get(ctx)
+	err = mBranch.Get(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
 
 	purchaseReturnModel.Pb = purchases.PurchaseReturn{
 		BranchId:   in.GetBranchId(),
-		BranchName: branch.GetName(),
+		BranchName: mBranch.Pb.GetName(),
 		Code:       in.GetCode(),
 		ReturnDate: in.GetReturnDate(),
 		Purchase:   in.GetPurchase(),

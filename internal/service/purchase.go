@@ -59,12 +59,16 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 
 		{
-			mProduct := model.Product{Client: u.ProductClient, Id: detail.GetProductId()}
-			if product, err := mProduct.Get(ctx); err != nil {
+			mProduct := model.Product{
+				Client: u.ProductClient,
+				Pb:     &inventories.Product{},
+				Id:     detail.GetProductId(),
+			}
+			if err := mProduct.Get(ctx); err != nil {
 				return &purchaseModel.Pb, err
 			} else {
-				in.GetDetails()[i].ProductCode = product.GetCode()
-				in.GetDetails()[i].ProductName = product.GetName()
+				in.GetDetails()[i].ProductCode = mProduct.Pb.GetCode()
+				in.GetDetails()[i].ProductName = mProduct.Pb.GetName()
 			}
 		}
 
@@ -82,14 +86,14 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
-	branch, err := mBranch.Get(ctx)
+	err = mBranch.Get(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
 
 	purchaseModel.Pb = purchases.Purchase{
 		BranchId:                   in.GetBranchId(),
-		BranchName:                 branch.GetName(),
+		BranchName:                 mBranch.Pb.GetName(),
 		Code:                       in.GetCode(),
 		PurchaseDate:               in.GetPurchaseDate(),
 		Supplier:                   in.GetSupplier(),
@@ -193,13 +197,17 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 
 		// call grpc product
-		mProduct := model.Product{Client: u.ProductClient, Id: detail.GetProductId()}
-		product, err := mProduct.Get(ctx)
+		mProduct := model.Product{
+			Client: u.ProductClient,
+			Pb:     &inventories.Product{},
+			Id:     detail.GetProductId(),
+		}
+		err := mProduct.Get(ctx)
 		if err != nil {
 			return &purchaseModel.Pb, err
 		} else {
-			in.GetDetails()[i].ProductCode = product.GetCode()
-			in.GetDetails()[i].ProductName = product.GetName()
+			in.GetDetails()[i].ProductCode = mProduct.Pb.GetCode()
+			in.GetDetails()[i].ProductName = mProduct.Pb.GetName()
 		}
 
 		if len(detail.GetId()) > 0 {
@@ -214,8 +222,8 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			purchaseDetailModel := model.PurchaseDetail{Pb: purchases.PurchaseDetail{
 				PurchaseId:       purchaseModel.Pb.GetId(),
 				ProductId:        detail.ProductId,
-				ProductCode:      product.GetCode(),
-				ProductName:      product.GetName(),
+				ProductCode:      mProduct.Pb.GetCode(),
+				ProductName:      mProduct.Pb.GetName(),
 				Price:            detail.GetPrice(),
 				DiscAmount:       detail.GetDiscAmount(),
 				DiscProsentation: detail.GetDiscProsentation(),

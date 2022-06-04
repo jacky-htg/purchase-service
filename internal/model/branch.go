@@ -14,6 +14,7 @@ type Branch struct {
 	UserClient   users.UserServiceClient
 	RegionClient users.RegionServiceClient
 	BranchClient users.BranchServiceClient
+	Pb           *users.Branch
 	Id           string
 }
 
@@ -107,11 +108,12 @@ func getBranches(ctx context.Context, branchClient users.BranchServiceClient) ([
 	return list, err
 }
 
-func (u *Branch) Get(ctx context.Context) (*users.Branch, error) {
+func (u *Branch) Get(ctx context.Context) error {
 	branch, err := u.BranchClient.View(app.SetMetadata(ctx), &users.Id{Id: u.Id})
 	if err != nil {
-		return &users.Branch{}, status.Errorf(codes.Internal, "Error when calling branch service: %v", err)
+		return status.Errorf(codes.Internal, "Error when calling branch service: %v", err)
 	}
+	u.Pb = branch
 
-	return branch, nil
+	return nil
 }
