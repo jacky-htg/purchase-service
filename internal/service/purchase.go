@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"purchase/internal/model"
+	"purchase/internal/pkg/app"
 	"purchase/pb/purchases"
 
 	"google.golang.org/grpc/codes"
@@ -45,7 +46,7 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 	}
 
-	ctx, err = getMetadata(ctx)
+	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
@@ -57,22 +58,31 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		if product, err := getProduct(ctx, u.ProductClient, detail.GetProductId()); err != nil {
-			return &purchaseModel.Pb, err
-		} else {
-			in.GetDetails()[i].ProductCode = product.GetCode()
-			in.GetDetails()[i].ProductName = product.GetName()
+		{
+			mProduct := model.Product{Client: u.ProductClient, Id: detail.GetProductId()}
+			if product, err := mProduct.Get(ctx); err != nil {
+				return &purchaseModel.Pb, err
+			} else {
+				in.GetDetails()[i].ProductCode = product.GetCode()
+				in.GetDetails()[i].ProductName = product.GetName()
+			}
 		}
 
 		sumPrice += detail.GetPrice()
 	}
 
-	err = isYourBranch(ctx, u.UserClient, u.RegionClient, u.BranchClient, in.GetBranchId())
+	mBranch := model.Branch{
+		UserClient:   u.UserClient,
+		RegionClient: u.RegionClient,
+		BranchClient: u.BranchClient,
+		Id:           in.GetBranchId(),
+	}
+	err = mBranch.IsYourBranch(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
 
-	branch, err := getBranch(ctx, u.BranchClient, in.GetBranchId())
+	branch, err := mBranch.Get(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
@@ -135,13 +145,14 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	// if any receiving transaction, do update will be blocked
-	if hasReceive, err := hasReceiveTransaction(ctx, u.ReceivingClient, in.GetId()); err != nil {
+	mReceive := model.Receive{Client: u.ReceivingClient}
+	if hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.GetId()); err != nil {
 		return &purchaseModel.Pb, err
 	} else if hasReceive {
 		return &purchaseModel.Pb, status.Error(codes.PermissionDenied, "Can not updated because the purchase has receiving transaction")
 	}
 
-	ctx, err = getMetadata(ctx)
+	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
@@ -182,7 +193,8 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 
 		// call grpc product
-		product, err := getProduct(ctx, u.ProductClient, detail.GetProductId())
+		mProduct := model.Product{Client: u.ProductClient, Id: detail.GetProductId()}
+		product, err := mProduct.Get(ctx)
 		if err != nil {
 			return &purchaseModel.Pb, err
 		} else {
@@ -270,7 +282,7 @@ func (u *Purchase) View(ctx context.Context, in *purchases.Id) (*purchases.Purch
 		purchaseModel.Pb.Id = in.GetId()
 	}
 
-	ctx, err = getMetadata(ctx)
+	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
@@ -286,7 +298,7 @@ func (u *Purchase) View(ctx context.Context, in *purchases.Id) (*purchases.Purch
 // List Purchase
 func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.PurchaseService_PurchaseListServer) error {
 	ctx := stream.Context()
-	ctx, err := getMetadata(ctx)
+	ctx, err := app.GetMetadata(ctx)
 	if err != nil {
 		return err
 	}
@@ -302,7 +314,7 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 	paginationResponse.Pagination = in.GetPagination()
 
 	for rows.Next() {
-		err := contextError(ctx)
+		err := app.ContextError(ctx)
 		if err != nil {
 			return err
 		}

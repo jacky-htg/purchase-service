@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"purchase/internal/model"
+	"purchase/internal/pkg/app"
 	"purchase/pb/purchases"
 	"purchase/pb/users"
 	"time"
@@ -41,12 +42,12 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		}
 	}
 
-	ctx, err = getMetadata(ctx)
+	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
 
-	// TODO : validate not any receiving order
+	// TODO : validate not any receiving order yet
 
 	// TODO : validate outstanding purchase
 	// 1. not
@@ -62,12 +63,18 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		detail.ProductName = ""
 	}
 
-	err = isYourBranch(ctx, u.UserClient, u.RegionClient, u.BranchClient, in.GetBranchId())
+	mBranch := model.Branch{
+		UserClient:   u.UserClient,
+		RegionClient: u.RegionClient,
+		BranchClient: u.BranchClient,
+		Id:           in.GetBranchId(),
+	}
+	err = mBranch.IsYourBranch(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
 
-	branch, err := getBranch(ctx, u.BranchClient, in.GetBranchId())
+	branch, err := mBranch.Get(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
@@ -110,7 +117,7 @@ func (u *PurchaseReturn) View(ctx context.Context, in *purchases.Id) (*purchases
 		purchaseReturnModel.Pb.Id = in.GetId()
 	}
 
-	ctx, err = getMetadata(ctx)
+	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
@@ -137,7 +144,7 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 		purchaseReturnModel.Pb.Id = in.GetId()
 	}
 
-	ctx, err = getMetadata(ctx)
+	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
@@ -269,7 +276,7 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 
 func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream purchases.PurchaseReturnService_PurchaseReturnListServer) error {
 	ctx := stream.Context()
-	ctx, err := getMetadata(ctx)
+	ctx, err := app.GetMetadata(ctx)
 	if err != nil {
 		return err
 	}
@@ -285,7 +292,7 @@ func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream pu
 	paginationResponse.Pagination = in.GetPagination()
 
 	for rows.Next() {
-		err := contextError(ctx)
+		err := app.ContextError(ctx)
 		if err != nil {
 			return err
 		}
