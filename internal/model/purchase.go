@@ -23,13 +23,17 @@ type Purchase struct {
 func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	query := `
 		SELECT purchases.id, purchases.company_id, purchases.branch_id, purchases.branch_name, purchases.supplier_id, purchases.code, 
-		purchases.purchase_date, purchases.remark, purchases.created_at, purchases.created_by, purchases.updated_at, purchases.updated_by,
+		purchases.purchase_date, purchases.remark, purchases.price, purchases.additional_disc_amount, purchases.additional_disc_prosentation,
+		purchases.created_at, purchases.created_by, purchases.updated_at, purchases.updated_by,
 		json_agg(DISTINCT jsonb_build_object(
 			'id', purchase_details.id,
 			'purchase_id', purchase_details.purchase_id,
 			'product_id', purchase_details.product_id,
 			'product_name', purchase_details.product_name,
-			'product_code', purchase_details.product_code
+			'product_code', purchase_details.product_code,
+			'price', purchase_details.price,
+			'disc_amount', purchase_details.disc_amount,
+			'disc_prosentation', purchase_details.disc_prosentation
 		)) as details
 		FROM purchases 
 		JOIN purchase_details ON purchases.id = purchase_details.purchase_id
@@ -44,8 +48,10 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 
 	var datePurchase, createdAt, updatedAt time.Time
 	var companyID, details string
+	var addDiscProsentation *float32
 	err = stmt.QueryRowContext(ctx, u.Pb.GetId()).Scan(
 		&u.Pb.Id, &companyID, &u.Pb.BranchId, &u.Pb.BranchName, &u.Pb.GetSupplier().Id, &u.Pb.Code, &datePurchase, &u.Pb.Remark,
+		&u.Pb.Price, &u.Pb.AdditionalDiscAmount, &addDiscProsentation,
 		&createdAt, &u.Pb.CreatedBy, &updatedAt, &u.Pb.UpdatedBy, &details,
 	)
 
@@ -64,13 +70,20 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	u.Pb.PurchaseDate = datePurchase.String()
 	u.Pb.CreatedAt = createdAt.String()
 	u.Pb.UpdatedAt = updatedAt.String()
+	if addDiscProsentation == nil {
+		*addDiscProsentation = float32(0)
+	}
+	u.Pb.AdditionalDiscProsentation = *addDiscProsentation
 
 	detailPurchases := []struct {
-		ID          string
-		PurchaseID  string
-		ProductID   string
-		ProductName string
-		ProductCode string
+		ID               string
+		PurchaseID       string
+		ProductID        string
+		ProductName      string
+		ProductCode      string
+		Price            float64
+		DiscAmount       float64
+		DiscProsentation *float32
 	}{}
 	err = json.Unmarshal([]byte(details), &detailPurchases)
 	if err != nil {
@@ -78,12 +91,22 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	}
 
 	for _, detail := range detailPurchases {
+		var discProsentation float32
+		if detail.DiscProsentation == nil {
+			discProsentation = 0
+		} else {
+			discProsentation = *detail.DiscProsentation
+		}
+
 		u.Pb.Details = append(u.Pb.Details, &purchases.PurchaseDetail{
-			Id:          detail.ID,
-			ProductId:   detail.ProductID,
-			ProductCode: detail.ProductCode,
-			ProductName: detail.ProductName,
-			PurchaseId:  detail.PurchaseID,
+			Id:               detail.ID,
+			ProductId:        detail.ProductID,
+			ProductCode:      detail.ProductCode,
+			ProductName:      detail.ProductName,
+			PurchaseId:       detail.PurchaseID,
+			Price:            detail.Price,
+			DiscAmount:       detail.DiscAmount,
+			DiscProsentation: discProsentation,
 		})
 	}
 
@@ -92,7 +115,8 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 
 func (u *Purchase) GetByCode(ctx context.Context, db *sql.DB) error {
 	query := `
-		SELECT id, branch_id, branch_name, supplier_id, code, purchase_date, remark, created_at, created_by, updated_at, updated_by 
+		SELECT id, branch_id, branch_name, supplier_id, code, purchase_date, remark, 
+			price, additional_disc_amount, additional_disc_prosentation, created_at, created_by, updated_at, updated_by 
 		FROM purchases WHERE purchases.code = $1 AND purchases.company_id = $2
 	`
 
@@ -103,8 +127,10 @@ func (u *Purchase) GetByCode(ctx context.Context, db *sql.DB) error {
 	defer stmt.Close()
 
 	var datePurchase, createdAt, updatedAt time.Time
+	var additionalDiscProsentation *float32
 	err = stmt.QueryRowContext(ctx, u.Pb.GetCode(), ctx.Value(app.Ctx("companyID")).(string)).Scan(
 		&u.Pb.Id, &u.Pb.BranchId, &u.Pb.BranchName, &u.Pb.GetSupplier().Id, &u.Pb.Code, &datePurchase, &u.Pb.Remark,
+		&u.Pb.Price, &u.Pb.AdditionalDiscAmount, &additionalDiscProsentation,
 		&createdAt, &u.Pb.CreatedBy, &updatedAt, &u.Pb.UpdatedBy,
 	)
 
@@ -119,6 +145,11 @@ func (u *Purchase) GetByCode(ctx context.Context, db *sql.DB) error {
 	u.Pb.PurchaseDate = datePurchase.String()
 	u.Pb.CreatedAt = createdAt.String()
 	u.Pb.UpdatedAt = updatedAt.String()
+	if additionalDiscProsentation == nil {
+		u.Pb.AdditionalDiscProsentation = 0
+	} else {
+		u.Pb.AdditionalDiscProsentation = *additionalDiscProsentation
+	}
 
 	return nil
 }
@@ -281,7 +312,7 @@ func (u *Purchase) Delete(ctx context.Context, db *sql.DB) error {
 
 func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.ListPurchaseRequest) (string, []interface{}, *purchases.PurchasePaginationResponse, error) {
 	var paginationResponse purchases.PurchasePaginationResponse
-	query := `SELECT id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, created_at, created_by, updated_at, updated_by FROM purchases`
+	query := `SELECT id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, price, additional_disc_amount, additional_disc_prosentation, created_at, created_by, updated_at, updated_by FROM purchases`
 
 	where := []string{"company_id = $1"}
 	paramQueries := []interface{}{ctx.Value(app.Ctx("companyID")).(string)}
@@ -293,7 +324,7 @@ func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.List
 
 	if len(in.GetSupplierId()) > 0 {
 		paramQueries = append(paramQueries, in.GetSupplierId())
-		where = append(where, fmt.Sprintf(`sales_order_id = $%d`, len(paramQueries)))
+		where = append(where, fmt.Sprintf(`supplier_id = $%d`, len(paramQueries)))
 	}
 
 	if len(in.GetPagination().GetSearch()) > 0 {

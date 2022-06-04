@@ -49,6 +49,7 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
+	var sumPrice float64
 	for i, detail := range in.GetDetails() {
 		// product validation
 		if len(detail.GetProductId()) == 0 {
@@ -61,6 +62,8 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 			in.GetDetails()[i].ProductCode = product.GetCode()
 			in.GetDetails()[i].ProductName = product.GetName()
 		}
+
+		sumPrice += detail.GetPrice()
 	}
 
 	err = isYourBranch(ctx, u.UserClient, u.RegionClient, u.BranchClient, in.GetBranchId())
@@ -80,7 +83,7 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		PurchaseDate:               in.GetPurchaseDate(),
 		Supplier:                   in.GetSupplier(),
 		Remark:                     in.GetRemark(),
-		Price:                      in.GetPrice(),
+		Price:                      sumPrice,
 		AdditionalDiscAmount:       in.GetAdditionalDiscAmount(),
 		AdditionalDiscProsentation: in.GetAdditionalDiscProsentation(),
 		Details:                    in.GetDetails(),
@@ -106,7 +109,7 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	var purchaseModel model.Purchase
 	var err error
 
-	// TODO : if this month any closing stock, create transaction for thus month will be blocked
+	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
 	// basic validation
 	{
@@ -116,7 +119,19 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		purchaseModel.Pb.Id = in.GetId()
 	}
 
-	// TODO : if any return do update will be blocked
+	// if any return, do update will be blocked
+	{
+		purchaseReturnModel := model.PurchaseReturn{
+			Pb: purchases.PurchaseReturn{
+				Purchase: &purchases.Purchase{Id: in.GetId()},
+			},
+		}
+		if anyReturn, err := purchaseReturnModel.HasReturn(ctx, u.Db); err != nil {
+			return &purchaseModel.Pb, err
+		} else if anyReturn {
+			return &purchaseModel.Pb, status.Error(codes.PermissionDenied, "Can not updated because the purchase has return transaction")
+		}
+	}
 
 	ctx, err = getMetadata(ctx)
 	if err != nil {
@@ -128,12 +143,19 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
-	if len(in.GetSupplier().Id) > 0 {
-		purchaseModel.Pb.GetSupplier().Id = in.GetSupplier().GetId()
-	}
+	// update field of purchase header
+	{
+		if len(in.GetSupplier().Id) > 0 {
+			purchaseModel.Pb.GetSupplier().Id = in.GetSupplier().GetId()
+		}
 
-	if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetPurchaseDate()); err == nil {
-		purchaseModel.Pb.PurchaseDate = in.GetPurchaseDate()
+		if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetPurchaseDate()); err == nil {
+			purchaseModel.Pb.PurchaseDate = in.GetPurchaseDate()
+		}
+
+		if len(in.GetRemark()) > 0 {
+			purchaseModel.Pb.Remark = in.GetRemark()
+		}
 	}
 
 	tx, err := u.Db.BeginTx(ctx, nil)
@@ -141,21 +163,24 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, status.Errorf(codes.Internal, "begin transaction: %v", err)
 	}
 
-	err = purchaseModel.Update(ctx, tx)
-	if err != nil {
-		tx.Rollback()
-		return &purchaseModel.Pb, err
-	}
-
 	var newDetails []*purchases.PurchaseDetail
-	for _, detail := range in.GetDetails() {
+	var sumPrice float64
+	for i, detail := range in.GetDetails() {
+		sumPrice += detail.GetPrice()
 		// product validation
 		if len(detail.GetProductId()) == 0 {
 			tx.Rollback()
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		// TODO : call grpc product
+		// call grpc product
+		product, err := getProduct(ctx, u.ProductClient, detail.GetProductId())
+		if err != nil {
+			return &purchaseModel.Pb, err
+		} else {
+			in.GetDetails()[i].ProductCode = product.GetCode()
+			in.GetDetails()[i].ProductName = product.GetName()
+		}
 
 		if len(detail.GetId()) > 0 {
 			for index, data := range purchaseModel.Pb.GetDetails() {
@@ -167,10 +192,13 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		} else {
 			// operasi insert
 			purchaseDetailModel := model.PurchaseDetail{Pb: purchases.PurchaseDetail{
-				PurchaseId:  purchaseModel.Pb.GetId(),
-				ProductId:   detail.ProductId,
-				ProductCode: detail.ProductCode,
-				ProductName: detail.ProductName,
+				PurchaseId:       purchaseModel.Pb.GetId(),
+				ProductId:        detail.ProductId,
+				ProductCode:      product.GetCode(),
+				ProductName:      product.GetName(),
+				Price:            detail.GetPrice(),
+				DiscAmount:       detail.GetDiscAmount(),
+				DiscProsentation: detail.GetDiscProsentation(),
 			}}
 			purchaseDetailModel.PbPurchase = purchases.Purchase{
 				Id:           purchaseModel.Pb.Id,
@@ -207,6 +235,13 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 			tx.Rollback()
 			return &purchaseModel.Pb, err
 		}
+	}
+
+	purchaseModel.Pb.Price = sumPrice
+	err = purchaseModel.Update(ctx, tx)
+	if err != nil {
+		tx.Rollback()
+		return &purchaseModel.Pb, err
 	}
 
 	tx.Commit()
@@ -267,8 +302,10 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 		var pbPurchase purchases.Purchase
 		var companyID string
 		var createdAt, updatedAt time.Time
+		var addDiscProsentation *float32
 		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName,
 			&pbPurchase.Code, &pbPurchase.PurchaseDate, &pbPurchase.Remark,
+			&pbPurchase.Price, &pbPurchase.AdditionalDiscAmount, &addDiscProsentation,
 			&createdAt, &pbPurchase.CreatedBy, &updatedAt, &pbPurchase.UpdatedBy)
 		if err != nil {
 			return status.Errorf(codes.Internal, "scan data: %v", err)
@@ -276,6 +313,11 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 
 		pbPurchase.CreatedAt = createdAt.String()
 		pbPurchase.UpdatedAt = updatedAt.String()
+		if addDiscProsentation == nil {
+			pbPurchase.AdditionalDiscProsentation = 0
+		} else {
+			pbPurchase.AdditionalDiscProsentation = *addDiscProsentation
+		}
 
 		res := &purchases.ListPurchaseResponse{
 			Pagination: paginationResponse,

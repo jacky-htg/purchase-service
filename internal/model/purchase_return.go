@@ -88,6 +88,34 @@ func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+func (u *PurchaseReturn) HasReturn(ctx context.Context, db *sql.DB) (bool, error) {
+	query := `
+		SELECT purchase_returns.id
+		FROM purchase_returns 
+		WHERE purchase_returns.purchase_id = $1 
+		LIMIT 0,1
+	`
+
+	stmt, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return false, status.Errorf(codes.Internal, "Prepare statement 'Has Purchase Return': %v", err)
+	}
+	defer stmt.Close()
+
+	var myId string
+	err = stmt.QueryRowContext(ctx, u.Pb.Purchase.GetId()).Scan(&myId)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, status.Errorf(codes.Internal, "Query Raw get by code purchase return: %v", err)
+	}
+
+	return true, nil
+}
+
 func (u *PurchaseReturn) Create(ctx context.Context, tx *sql.Tx) error {
 	u.Pb.Id = uuid.New().String()
 	now := time.Now().UTC()
