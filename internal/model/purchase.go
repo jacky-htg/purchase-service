@@ -155,8 +155,8 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	query := `
-		INSERT INTO purchases (id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, created_at, created_by, updated_at, updated_by) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO purchases (id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, price, additional_disc_amount, additional_disc_prosentation, created_at, created_by, updated_at, updated_by) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -173,6 +173,9 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 		u.Pb.GetCode(),
 		datePurchase,
 		u.Pb.GetRemark(),
+		u.Pb.GetPrice(),
+		u.Pb.GetAdditionalDiscAmount(),
+		u.Pb.GetAdditionalDiscProsentation(),
 		now,
 		u.Pb.GetCreatedBy(),
 		now,
@@ -188,23 +191,29 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 	for _, detail := range u.Pb.GetDetails() {
 		purchaseDetailModel := PurchaseDetail{}
 		purchaseDetailModel.Pb = purchases.PurchaseDetail{
-			PurchaseId:  u.Pb.GetId(),
-			ProductId:   detail.GetProductId(),
-			ProductCode: detail.GetProductCode(),
-			ProductName: detail.GetProductName(),
+			PurchaseId:       u.Pb.GetId(),
+			ProductId:        detail.GetProductId(),
+			ProductCode:      detail.GetProductCode(),
+			ProductName:      detail.GetProductName(),
+			Price:            detail.GetPrice(),
+			DiscAmount:       detail.GetDiscAmount(),
+			DiscProsentation: detail.GetDiscProsentation(),
 		}
 		purchaseDetailModel.PbPurchase = purchases.Purchase{
-			Id:           u.Pb.Id,
-			BranchId:     u.Pb.BranchId,
-			BranchName:   u.Pb.BranchName,
-			Supplier:     u.Pb.GetSupplier(),
-			Code:         u.Pb.Code,
-			PurchaseDate: u.Pb.PurchaseDate,
-			Remark:       u.Pb.Remark,
-			CreatedAt:    u.Pb.CreatedAt,
-			CreatedBy:    u.Pb.CreatedBy,
-			UpdatedAt:    u.Pb.UpdatedAt,
-			UpdatedBy:    u.Pb.UpdatedBy,
+			Id:                         u.Pb.Id,
+			BranchId:                   u.Pb.BranchId,
+			BranchName:                 u.Pb.BranchName,
+			Supplier:                   u.Pb.GetSupplier(),
+			Code:                       u.Pb.Code,
+			PurchaseDate:               u.Pb.PurchaseDate,
+			Remark:                     u.Pb.Remark,
+			Price:                      u.Pb.Price,
+			AdditionalDiscAmount:       u.Pb.AdditionalDiscAmount,
+			AdditionalDiscProsentation: u.Pb.AdditionalDiscProsentation,
+			CreatedAt:                  u.Pb.CreatedAt,
+			CreatedBy:                  u.Pb.CreatedBy,
+			UpdatedAt:                  u.Pb.UpdatedAt,
+			UpdatedBy:                  u.Pb.UpdatedBy,
 		}
 		err = purchaseDetailModel.Create(ctx, tx)
 		if err != nil {

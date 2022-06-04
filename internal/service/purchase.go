@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"purchase/pb/inventories"
 	"purchase/pb/users"
 	"time"
 
@@ -14,17 +15,19 @@ import (
 )
 
 type Purchase struct {
-	Db           *sql.DB
-	UserClient   users.UserServiceClient
-	RegionClient users.RegionServiceClient
-	BranchClient users.BranchServiceClient
+	Db            *sql.DB
+	UserClient    users.UserServiceClient
+	RegionClient  users.RegionServiceClient
+	BranchClient  users.BranchServiceClient
+	ProductClient inventories.ProductServiceClient
+	purchases.UnimplementedPurchaseServiceServer
 }
 
 func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchases.Purchase, error) {
 	var purchaseModel model.Purchase
 	var err error
 
-	// TODO : if this month any closing stock, create transaction for thus month will be blocked
+	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
 	// basic validation
 	{
@@ -46,14 +49,18 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
-	for _, detail := range in.GetDetails() {
+	for i, detail := range in.GetDetails() {
 		// product validation
 		if len(detail.GetProductId()) == 0 {
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		// TODO : validation product by call grpc product
-
+		if product, err := getProduct(ctx, u.ProductClient, detail.GetProductId()); err != nil {
+			return &purchaseModel.Pb, err
+		} else {
+			in.GetDetails()[i].ProductCode = product.GetCode()
+			in.GetDetails()[i].ProductName = product.GetName()
+		}
 	}
 
 	err = isYourBranch(ctx, u.UserClient, u.RegionClient, u.BranchClient, in.GetBranchId())
@@ -67,13 +74,16 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	purchaseModel.Pb = purchases.Purchase{
-		BranchId:     in.GetBranchId(),
-		BranchName:   branch.GetName(),
-		Code:         in.GetCode(),
-		PurchaseDate: in.GetPurchaseDate(),
-		Supplier:     in.GetSupplier(),
-		Remark:       in.GetRemark(),
-		Details:      in.GetDetails(),
+		BranchId:                   in.GetBranchId(),
+		BranchName:                 branch.GetName(),
+		Code:                       in.GetCode(),
+		PurchaseDate:               in.GetPurchaseDate(),
+		Supplier:                   in.GetSupplier(),
+		Remark:                     in.GetRemark(),
+		Price:                      in.GetPrice(),
+		AdditionalDiscAmount:       in.GetAdditionalDiscAmount(),
+		AdditionalDiscProsentation: in.GetAdditionalDiscProsentation(),
+		Details:                    in.GetDetails(),
 	}
 
 	tx, err := u.Db.BeginTx(ctx, nil)

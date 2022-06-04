@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"io"
+	"purchase/pb/inventories"
 	"purchase/pb/users"
 
 	"purchase/internal/pkg/app"
@@ -157,4 +158,14 @@ func getBranch(ctx context.Context, branchClient users.BranchServiceClient, id s
 	}
 
 	return branch, nil
+}
+
+func getProduct(ctx context.Context, productClient inventories.ProductServiceClient, id string) (*inventories.Product, error) {
+	product, err := productClient.View(setMetadata(ctx), &inventories.Id{Id: id})
+	if err != nil {
+		// TODO : set status error only if respone status error from product service is 'unknow'
+		return &inventories.Product{}, status.Errorf(codes.Internal, "Error when calling product service: %v", err)
+	}
+
+	return product, nil
 }

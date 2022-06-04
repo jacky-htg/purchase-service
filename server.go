@@ -53,8 +53,14 @@ func main() {
 	}
 	defer userConn.Close()
 
+	inventoryConn, err := grpc.Dial(os.Getenv("INVENTORY_SERVICE"), grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("create inventory service connection: %v", err)
+	}
+	defer userConn.Close()
+
 	// routing grpc services
-	route.GrpcRoute(grpcServer, db, log, userConn)
+	route.GrpcRoute(grpcServer, db, log, userConn, inventoryConn)
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %s", err)
