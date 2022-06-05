@@ -302,18 +302,14 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	return &purchaseModel.Pb, nil
 }
 
-// View Purchase
 func (u *Purchase) View(ctx context.Context, in *purchases.Id) (*purchases.Purchase, error) {
 	var purchaseModel model.Purchase
 	var err error
 
-	// basic validation
-	{
-		if len(in.GetId()) == 0 {
-			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
-		}
-		purchaseModel.Pb.Id = in.GetId()
+	if len(in.GetId()) == 0 {
+		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
 	}
+	purchaseModel.Pb.Id = in.GetId()
 
 	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
@@ -328,7 +324,6 @@ func (u *Purchase) View(ctx context.Context, in *purchases.Id) (*purchases.Purch
 	return &purchaseModel.Pb, nil
 }
 
-// List Purchase
 func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.PurchaseService_PurchaseListServer) error {
 	ctx := stream.Context()
 	ctx, err := app.GetMetadata(ctx)
@@ -380,21 +375,19 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 }
 
 func (u *Purchase) createValidation(ctx context.Context, in *purchases.Purchase) ([]*inventories.ListProductResponse, error) {
-	// basic validation
-	{
-		if len(in.GetBranchId()) == 0 {
-			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid branch")
-		}
-
-		if len(in.GetSupplier().Id) == 0 {
-			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid supplier")
-		}
-
-		if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetPurchaseDate()); err != nil {
-			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid date")
-		}
+	if len(in.GetBranchId()) == 0 {
+		return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid branch")
 	}
 
+	if len(in.GetSupplier().Id) == 0 {
+		return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid supplier")
+	}
+
+	if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetPurchaseDate()); err != nil {
+		return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid date")
+	}
+
+	// validate bulk product by call product grpc
 	var productIds []string
 	for _, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
