@@ -31,19 +31,9 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 
 	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
-	// basic validation
-	{
-		if len(in.GetBranchId()) == 0 {
-			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid branch")
-		}
-
-		if len(in.GetSupplier().Id) == 0 {
-			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid supplier")
-		}
-
-		if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetPurchaseDate()); err != nil {
-			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid date")
-		}
+	products, err := u.createValidation(ctx, in)
+	if err != nil {
+		return &purchaseModel.Pb, err
 	}
 
 	ctx, err = app.GetMetadata(ctx)
@@ -52,29 +42,6 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	var sumPrice float64
-	var productIds []string
-	for _, detail := range in.GetDetails() {
-		if len(detail.GetProductId()) == 0 {
-			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
-		}
-
-		productIds = append(productIds, detail.GetProductId())
-	}
-
-	mProduct := model.Product{
-		Client: u.ProductClient,
-		Pb:     &inventories.Product{},
-	}
-
-	inProductList := inventories.ListProductRequest{
-		Ids: productIds,
-	}
-	products, err := mProduct.List(ctx, &inProductList)
-
-	if len(products) != len(productIds) {
-		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
-	}
-
 	for i, detail := range in.GetDetails() {
 		for _, p := range products {
 			if detail.GetProductId() == p.Product.GetId() {
@@ -410,4 +377,49 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 		}
 	}
 	return nil
+}
+
+func (u *Purchase) createValidation(ctx context.Context, in *purchases.Purchase) ([]*inventories.ListProductResponse, error) {
+	// basic validation
+	{
+		if len(in.GetBranchId()) == 0 {
+			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid branch")
+		}
+
+		if len(in.GetSupplier().Id) == 0 {
+			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid supplier")
+		}
+
+		if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetPurchaseDate()); err != nil {
+			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid date")
+		}
+	}
+
+	var productIds []string
+	for _, detail := range in.GetDetails() {
+		if len(detail.GetProductId()) == 0 {
+			return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid product")
+		}
+
+		productIds = append(productIds, detail.GetProductId())
+	}
+
+	mProduct := model.Product{
+		Client: u.ProductClient,
+		Pb:     &inventories.Product{},
+	}
+
+	inProductList := inventories.ListProductRequest{
+		Ids: productIds,
+	}
+	products, err := mProduct.List(ctx, &inProductList)
+	if err != nil {
+		return []*inventories.ListProductResponse{}, err
+	}
+
+	if len(products) != len(productIds) {
+		return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid product")
+	}
+
+	return products, nil
 }
