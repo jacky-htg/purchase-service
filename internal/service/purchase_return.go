@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"purchase/internal/model"
 	"purchase/internal/pkg/app"
+	"purchase/pb/inventories"
 	"purchase/pb/purchases"
 	"purchase/pb/users"
 	"time"
@@ -14,10 +15,11 @@ import (
 )
 
 type PurchaseReturn struct {
-	Db           *sql.DB
-	UserClient   users.UserServiceClient
-	RegionClient users.RegionServiceClient
-	BranchClient users.BranchServiceClient
+	Db            *sql.DB
+	UserClient    users.UserServiceClient
+	RegionClient  users.RegionServiceClient
+	BranchClient  users.BranchServiceClient
+	ReceiveClient inventories.ReceiveServiceClient
 	purchases.UnimplementedPurchaseReturnServiceServer
 }
 
@@ -47,7 +49,12 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		return &purchaseReturnModel.Pb, err
 	}
 
-	// TODO : validate not any receiving order yet
+	// validate not any receiving order yet
+	mReceive := model.Receive{Client: u.ReceiveClient}
+	hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.Purchase.Id)
+	if hasReceive {
+		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has already receiving transaction ")
+	}
 
 	// TODO : validate outstanding purchase
 
