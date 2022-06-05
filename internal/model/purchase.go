@@ -335,3 +335,44 @@ func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.List
 
 	return query, paramQueries, &paginationResponse, nil
 }
+
+func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB) ([]*purchases.PurchaseDetail, error) {
+	var list []*purchases.PurchaseDetail
+
+	query := `
+		SELECT purchase_details.product_id, (purchase_details.quantity - purchase_returns.return_quantity) quantity 
+		FROM purchase_details 
+		JOIN purchases ON purchase_details.purchase_id = purchases.id
+		JOIN (
+			SELECT purchase_return_details.product_id, SUM(purchase_return_details.quantity) return_quantity  
+			FROM purchase_returns
+			JOIN purchase_return_details ON purchase_returns.id = purchase_return_details.purchase_return_id
+			WHERE purchase_returns.purchase_id = $1 
+			GROUP BY purchase_return_details.product_id
+		) AS purchase_returns ON purchase_details.product_id = purchase_returns.product_id
+		WHERE purchase_details.purchase_id = $1 
+			AND (purchase_details.quantity - purchase_returns.return_quantity) > 0		
+			AND purchases.company_id = $2
+	`
+	rows, err := db.QueryContext(ctx, query, u.Pb.Id, ctx.Value(app.Ctx("companyID")).(string))
+	if err != nil {
+		return list, status.Error(codes.Internal, err.Error())
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var pbPurchaseDetail purchases.PurchaseDetail
+		err = rows.Scan(&pbPurchaseDetail.ProductId, &pbPurchaseDetail.Quantity)
+		if err != nil {
+			return list, status.Errorf(codes.Internal, "scan data: %v", err)
+		}
+
+		list = append(list, &pbPurchaseDetail)
+	}
+
+	if rows.Err() == nil {
+		return list, status.Errorf(codes.Internal, "rows error: %v", err)
+	}
+
+	return list, nil
+}

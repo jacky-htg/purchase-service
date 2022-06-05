@@ -53,22 +53,24 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	mReceive := model.Receive{Client: u.ReceiveClient}
 	hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.Purchase.Id)
 	if hasReceive {
-		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has already receiving transaction ")
+		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has receive transaction ")
 	}
 
-	// TODO : validate outstanding purchase
+	// validate outstanding purchase
+	mPurchase := model.Purchase{Pb: purchases.Purchase{Id: in.Purchase.Id}}
+	outstandingPurchaseDetails, err := mPurchase.OutstandingDetail(ctx, u.Db)
+	if len(outstandingPurchaseDetails) == 0 {
+		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has been returned ")
+	}
 
 	for _, detail := range in.GetDetails() {
-		// product validation
 		if len(detail.GetProductId()) == 0 {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		// TODO : validate outstanding purchase details
-
-		// TODO : call product from inventory grpc
-		detail.ProductCode = ""
-		detail.ProductName = ""
+		if !u.validateOutstandingDetail(ctx, detail, outstandingPurchaseDetails) {
+			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid outstanding product")
+		}
 	}
 
 	mBranch := model.Branch{
@@ -331,4 +333,16 @@ func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream pu
 		}
 	}
 	return nil
+}
+
+func (u *PurchaseReturn) validateOutstandingDetail(ctx context.Context, in *purchases.PurchaseReturnDetail, outstanding []*purchases.PurchaseDetail) bool {
+	isValid := false
+	for _, out := range outstanding {
+		if in.ProductId == out.ProductId {
+			isValid = true
+			break
+		}
+	}
+
+	return isValid
 }
