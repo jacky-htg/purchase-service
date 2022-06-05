@@ -11,9 +11,12 @@ type Receive struct {
 
 func (u *Receive) HasTransactionByPurchase(ctx context.Context, purchaseId string) (bool, error) {
 	/* anyReceive, err := u.Client.HasReceive(app.SetMetadata(ctx), &inventories.Id{Id: purchaseId})
-	if err != nil {
-		// TODO : set status error only if respone status error from product service is 'unknow'
-		return false, status.Errorf(codes.Internal, "Error when calling receive service: %v", err)
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.Unknown {
+			err = status.Errorf(codes.Internal, "Error when calling Purchase.HasTreansaction service: %s", err)
+		}
+
+		return response, err
 	}
 
 	return anyReceive, nil */

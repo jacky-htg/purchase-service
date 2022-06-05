@@ -69,9 +69,12 @@ func checkYourBranch(branches []*users.Branch, branchID string) error {
 
 func getUserLogin(ctx context.Context, userClient users.UserServiceClient) (*users.User, error) {
 	userLogin, err := userClient.View(app.SetMetadata(ctx), &users.Id{Id: ctx.Value(app.Ctx("userID")).(string)})
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.Unknown {
+			err = status.Errorf(codes.Internal, "Error when calling user.Get service: %s", err)
+		}
 
-	if err != nil {
-		return &users.User{}, status.Errorf(codes.Internal, "Error when calling user service: %v", err)
+		return &users.User{}, err
 	}
 
 	return userLogin, nil
@@ -80,8 +83,12 @@ func getUserLogin(ctx context.Context, userClient users.UserServiceClient) (*use
 func getRegion(ctx context.Context, regionClient users.RegionServiceClient, r *users.Region) (*users.Region, error) {
 	region, err := regionClient.View(app.SetMetadata(ctx), &users.Id{Id: r.GetId()})
 
-	if err != nil {
-		return &users.Region{}, status.Errorf(codes.Internal, "Error when calling region service: %v", err)
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.Unknown {
+			err = status.Errorf(codes.Internal, "Error when calling Region.Get service: %s", err)
+		}
+
+		return &users.Region{}, err
 	}
 
 	return region, nil
@@ -91,8 +98,13 @@ func getBranches(ctx context.Context, branchClient users.BranchServiceClient) ([
 	var list []*users.Branch
 	var err error
 	stream, err := branchClient.List(app.SetMetadata(ctx), &users.ListBranchRequest{})
-	if err != nil {
-		return list, status.Errorf(codes.Internal, "Error when calling branches service: %s", err)
+
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.Unknown {
+			err = status.Errorf(codes.Internal, "Error when calling Branches.List service: %s", err)
+		}
+
+		return list, err
 	}
 
 	for {
@@ -110,8 +122,12 @@ func getBranches(ctx context.Context, branchClient users.BranchServiceClient) ([
 
 func (u *Branch) Get(ctx context.Context) error {
 	branch, err := u.BranchClient.View(app.SetMetadata(ctx), &users.Id{Id: u.Id})
-	if err != nil {
-		return status.Errorf(codes.Internal, "Error when calling branch service: %v", err)
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.Unknown {
+			err = status.Errorf(codes.Internal, "Error when calling Branch.Get service: %s", err)
+		}
+
+		return err
 	}
 	u.Pb = branch
 

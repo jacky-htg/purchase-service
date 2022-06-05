@@ -52,31 +52,40 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	var sumPrice float64
-	for i, detail := range in.GetDetails() {
-		// product validation
+	var productIds []string
+	for _, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		{
-			// TODO : Pertimbangkan untuk melakukan validasi secara bulk agar tidak looping call grpc product
-			mProduct := model.Product{
-				Client: u.ProductClient,
-				Pb:     &inventories.Product{},
-				Id:     detail.GetProductId(),
-			}
-			if err := mProduct.Get(ctx); err != nil {
-				return &purchaseModel.Pb, err
-			} else {
-				in.GetDetails()[i].ProductCode = mProduct.Pb.GetCode()
-				in.GetDetails()[i].ProductName = mProduct.Pb.GetName()
+		productIds = append(productIds, detail.GetProductId())
+	}
+
+	mProduct := model.Product{
+		Client: u.ProductClient,
+		Pb:     &inventories.Product{},
+	}
+
+	inProductList := inventories.ListProductRequest{
+		Ids: productIds,
+	}
+	products, err := mProduct.List(ctx, &inProductList)
+
+	if len(products) != len(productIds) {
+		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
+	}
+
+	for i, detail := range in.GetDetails() {
+		for _, p := range products {
+			if detail.GetProductId() == p.Product.GetId() {
+				in.GetDetails()[i].ProductCode = p.Product.GetCode()
+				in.GetDetails()[i].ProductName = p.Product.GetName()
 			}
 		}
 
 		if detail.DiscPercentage > 0 {
 			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
 		}
-
 		sumPrice += detail.GetPrice()
 	}
 
@@ -200,28 +209,43 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 
 	var newDetails []*purchases.PurchaseDetail
 	var sumPrice float64
-	for i, detail := range in.GetDetails() {
+	var productIds []string
+	for _, detail := range in.GetDetails() {
 		sumPrice += detail.GetPrice()
-		// product validation
 		if len(detail.GetProductId()) == 0 {
 			tx.Rollback()
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		// TODO : pertimbangkan untuk melakukan validasi product secara bulk agar tidak looping call grpc product
-		// call grpc product
-		mProduct := model.Product{
-			Client: u.ProductClient,
-			Pb:     &inventories.Product{},
-			Id:     detail.GetProductId(),
+		productIds = append(productIds, detail.GetProductId())
+	}
+
+	mProduct := model.Product{
+		Client: u.ProductClient,
+		Pb:     &inventories.Product{},
+	}
+
+	inProductList := inventories.ListProductRequest{
+		Ids: productIds,
+	}
+	products, err := mProduct.List(ctx, &inProductList)
+
+	if len(products) != len(productIds) {
+		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
+	}
+
+	for i, detail := range in.GetDetails() {
+		for _, p := range products {
+			if detail.GetProductId() == p.Product.GetId() {
+				in.GetDetails()[i].ProductCode = p.Product.GetCode()
+				in.GetDetails()[i].ProductName = p.Product.GetName()
+			}
 		}
-		err := mProduct.Get(ctx)
-		if err != nil {
-			return &purchaseModel.Pb, err
-		} else {
-			in.GetDetails()[i].ProductCode = mProduct.Pb.GetCode()
-			in.GetDetails()[i].ProductName = mProduct.Pb.GetName()
+
+		if detail.DiscPercentage > 0 {
+			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
 		}
+		sumPrice += detail.GetPrice()
 
 		if len(detail.GetId()) > 0 {
 			for index, data := range purchaseModel.Pb.GetDetails() {
