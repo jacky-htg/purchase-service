@@ -14,20 +14,21 @@ import (
 // GrpcRoute func
 func GrpcRoute(grpcServer *grpc.Server, db *sql.DB, log *logrus.Entry, userConn *grpc.ClientConn, inventoryConn *grpc.ClientConn) {
 	purchaseServer := service.Purchase{
-		Db:              db,
-		UserClient:      users.NewUserServiceClient((userConn)),
-		RegionClient:    users.NewRegionServiceClient(userConn),
-		BranchClient:    users.NewBranchServiceClient(userConn),
-		ProductClient:   inventories.NewProductServiceClient(inventoryConn),
-		ReceivingClient: inventories.NewReceiveServiceClient(inventoryConn),
+		Db:            db,
+		UserClient:    users.NewUserServiceClient((userConn)),
+		RegionClient:  users.NewRegionServiceClient(userConn),
+		BranchClient:  users.NewBranchServiceClient(userConn),
+		ProductClient: inventories.NewProductServiceClient(inventoryConn),
+		ReceiveClient: inventories.NewReceiveServiceClient(inventoryConn),
 	}
 	purchases.RegisterPurchaseServiceServer(grpcServer, &purchaseServer)
 
 	purchaseReturnServer := service.PurchaseReturn{
-		Db:           db,
-		UserClient:   users.NewUserServiceClient((userConn)),
-		RegionClient: users.NewRegionServiceClient(userConn),
-		BranchClient: users.NewBranchServiceClient(userConn),
+		Db:            db,
+		UserClient:    users.NewUserServiceClient((userConn)),
+		RegionClient:  users.NewRegionServiceClient(userConn),
+		BranchClient:  users.NewBranchServiceClient(userConn),
+		ReceiveClient: inventories.NewReceiveServiceClient(inventoryConn),
 	}
 	purchases.RegisterPurchaseReturnServiceServer(grpcServer, &purchaseReturnServer)
 }

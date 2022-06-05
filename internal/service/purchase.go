@@ -16,12 +16,12 @@ import (
 )
 
 type Purchase struct {
-	Db              *sql.DB
-	UserClient      users.UserServiceClient
-	RegionClient    users.RegionServiceClient
-	BranchClient    users.BranchServiceClient
-	ProductClient   inventories.ProductServiceClient
-	ReceivingClient inventories.ReceiveServiceClient
+	Db            *sql.DB
+	UserClient    users.UserServiceClient
+	RegionClient  users.RegionServiceClient
+	BranchClient  users.BranchServiceClient
+	ProductClient inventories.ProductServiceClient
+	ReceiveClient inventories.ReceiveServiceClient
 	purchases.UnimplementedPurchaseServiceServer
 }
 
@@ -133,7 +133,7 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	// if any receiving transaction, do update will be blocked
-	mReceive := model.Receive{Client: u.ReceivingClient}
+	mReceive := model.Receive{Client: u.ReceiveClient}
 	if hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.GetId()); err != nil {
 		return &purchaseModel.Pb, err
 	} else if hasReceive {
