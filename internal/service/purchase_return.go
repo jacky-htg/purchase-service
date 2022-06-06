@@ -29,19 +29,16 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 
 	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
-	// basic validation
-	{
-		if len(in.GetBranchId()) == 0 {
-			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid branch")
-		}
+	if len(in.GetBranchId()) == 0 {
+		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid branch")
+	}
 
-		if len(in.GetPurchase().GetId()) == 0 {
-			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid purchasing")
-		}
+	if len(in.GetPurchase().GetId()) == 0 {
+		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid purchasing")
+	}
 
-		if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetReturnDate()); err != nil {
-			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid date")
-		}
+	if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetReturnDate()); err != nil {
+		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid date")
 	}
 
 	ctx, err = app.GetMetadata(ctx)
@@ -58,12 +55,18 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 
 	// validate outstanding purchase
 	mPurchase := model.Purchase{Pb: purchases.Purchase{Id: in.Purchase.Id}}
-	outstandingPurchaseDetails, err := mPurchase.OutstandingDetail(ctx, u.Db)
+	outstandingPurchaseDetails, err := mPurchase.OutstandingDetail(ctx, u.Db, nil)
 	if len(outstandingPurchaseDetails) == 0 {
 		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has been returned ")
 	}
 
-	for _, detail := range in.GetDetails() {
+	err = mPurchase.Get(ctx, u.Db)
+	if err != nil {
+		return &purchaseReturnModel.Pb, status.Error(codes.Internal, "Failed Get Purchase")
+	}
+
+	var sumPrice float64
+	for i, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
@@ -71,6 +74,18 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		if !u.validateOutstandingDetail(ctx, detail, outstandingPurchaseDetails) {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid outstanding product")
 		}
+
+		for _, p := range mPurchase.Pb.GetDetails() {
+			if p.GetProductId() == detail.ProductId {
+				in.GetDetails()[i].Price = p.Price
+				// TODO : jaga kalau ada disc amount tanpa percentage
+				if p.DiscPercentage > 0 {
+					in.GetDetails()[i].DiscPercentage = p.DiscPercentage
+					in.GetDetails()[i].DiscAmount = p.GetPrice() * float64(p.DiscPercentage) / 100
+				}
+			}
+		}
+		sumPrice += detail.GetPrice()
 	}
 
 	mBranch := model.Branch{
@@ -119,13 +134,10 @@ func (u *PurchaseReturn) View(ctx context.Context, in *purchases.Id) (*purchases
 	var purchaseReturnModel model.PurchaseReturn
 	var err error
 
-	// basic validation
-	{
-		if len(in.GetId()) == 0 {
-			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
-		}
-		purchaseReturnModel.Pb.Id = in.GetId()
+	if len(in.GetId()) == 0 {
+		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
 	}
+	purchaseReturnModel.Pb.Id = in.GetId()
 
 	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
@@ -146,17 +158,29 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 
 	// TODO : if this month any closing stock, create transaction for thus month will be blocked
 
-	// basic validation
-	{
-		if len(in.GetId()) == 0 {
-			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
-		}
-		purchaseReturnModel.Pb.Id = in.GetId()
+	if len(in.GetId()) == 0 {
+		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
 	}
+	purchaseReturnModel.Pb.Id = in.GetId()
 
 	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
+	}
+
+	// validate not any receiving order yet
+	mReceive := model.Receive{Client: u.ReceiveClient}
+	hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.Purchase.Id)
+	if hasReceive {
+		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has receive transaction ")
+	}
+
+	// validate outstanding purchase
+	mPurchase := model.Purchase{Pb: purchases.Purchase{Id: in.Purchase.Id}}
+	purchaseReturnId := in.GetId()
+	outstandingPurchaseDetails, err := mPurchase.OutstandingDetail(ctx, u.Db, &purchaseReturnId)
+	if len(outstandingPurchaseDetails) == 0 {
+		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has been returned ")
 	}
 
 	err = purchaseReturnModel.Get(ctx, u.Db)
@@ -185,17 +209,14 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 
 	var newDetails []*purchases.PurchaseReturnDetail
 	for _, detail := range in.GetDetails() {
-		// product validation
 		if len(detail.GetProductId()) == 0 {
 			tx.Rollback()
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		// TODO : CALL GRPC PRODUCT FROM INVENTORY SERVICE
-		detail.ProductCode = ""
-		detail.ProductName = ""
-
-		// TODO : validation outstanding purchase detail
+		if !u.validateOutstandingDetail(ctx, detail, outstandingPurchaseDetails) {
+			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid outstanding product")
+		}
 
 		if len(detail.GetId()) > 0 {
 			// operasi update
@@ -338,7 +359,7 @@ func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream pu
 func (u *PurchaseReturn) validateOutstandingDetail(ctx context.Context, in *purchases.PurchaseReturnDetail, outstanding []*purchases.PurchaseDetail) bool {
 	isValid := false
 	for _, out := range outstanding {
-		if in.ProductId == out.ProductId {
+		if in.ProductId == out.ProductId && in.Quantity <= out.Quantity {
 			isValid = true
 			break
 		}

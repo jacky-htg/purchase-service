@@ -31,29 +31,30 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 
 	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
-	products, err := u.createValidation(ctx, in)
-	if err != nil {
-		return &purchaseModel.Pb, err
-	}
-
 	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
 		return &purchaseModel.Pb, err
 	}
 
+	products, err := u.createValidation(ctx, in)
+	if err != nil {
+		return &purchaseModel.Pb, err
+	}
+
 	var sumPrice float64
-	for i, detail := range in.GetDetails() {
+	for _, detail := range in.GetDetails() {
 		for _, p := range products {
 			if detail.GetProductId() == p.Product.GetId() {
-				in.GetDetails()[i].ProductCode = p.Product.GetCode()
-				in.GetDetails()[i].ProductName = p.Product.GetName()
+				detail.ProductCode = p.Product.GetCode()
+				detail.ProductName = p.Product.GetName()
 			}
 		}
 
 		if detail.DiscPercentage > 0 {
-			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
+			detail.DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
 		}
-		sumPrice += detail.GetPrice()
+		detail.TotalPrice = (detail.GetPrice() + detail.DiscAmount) * float64(detail.Quantity)
+		sumPrice += detail.TotalPrice
 	}
 
 	mBranch := model.Branch{
@@ -82,9 +83,10 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 		PurchaseDate:             in.GetPurchaseDate(),
 		Supplier:                 in.GetSupplier(),
 		Remark:                   in.GetRemark(),
-		TotalPrice:               sumPrice,
+		Price:                    sumPrice,
 		AdditionalDiscAmount:     in.GetAdditionalDiscAmount(),
 		AdditionalDiscPercentage: in.GetAdditionalDiscPercentage(),
+		TotalPrice:               (sumPrice - in.GetAdditionalDiscAmount()),
 		Details:                  in.GetDetails(),
 	}
 
@@ -110,13 +112,10 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 
 	// TODO : if this month any closing account, create transaction for thus month will be blocked
 
-	// basic validation
-	{
-		if len(in.GetId()) == 0 {
-			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
-		}
-		purchaseModel.Pb.Id = in.GetId()
+	if len(in.GetId()) == 0 {
+		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
 	}
+	purchaseModel.Pb.Id = in.GetId()
 
 	// if any return, do update will be blocked
 	{
@@ -175,10 +174,8 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	}
 
 	var newDetails []*purchases.PurchaseDetail
-	var sumPrice float64
 	var productIds []string
 	for _, detail := range in.GetDetails() {
-		sumPrice += detail.GetPrice()
 		if len(detail.GetProductId()) == 0 {
 			tx.Rollback()
 			return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
@@ -201,18 +198,20 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 	}
 
-	for i, detail := range in.GetDetails() {
+	var sumPrice float64
+	for _, detail := range in.GetDetails() {
 		for _, p := range products {
 			if detail.GetProductId() == p.Product.GetId() {
-				in.GetDetails()[i].ProductCode = p.Product.GetCode()
-				in.GetDetails()[i].ProductName = p.Product.GetName()
+				detail.ProductCode = p.Product.GetCode()
+				detail.ProductName = p.Product.GetName()
 			}
 		}
 
 		if detail.DiscPercentage > 0 {
-			in.GetDetails()[i].DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
+			detail.DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
 		}
-		sumPrice += detail.GetPrice()
+		detail.TotalPrice = (detail.GetPrice() - detail.DiscAmount) * float64(detail.Quantity)
+		sumPrice += detail.GetTotalPrice()
 
 		if len(detail.GetId()) > 0 {
 			for index, data := range purchaseModel.Pb.GetDetails() {
@@ -233,7 +232,8 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 
 					if detail.DiscPercentage > 0 {
 						data.DiscPercentage = detail.DiscPercentage
-						data.DiscAmount = data.Price * float64(data.DiscPercentage) / 100
+						data.DiscAmount = detail.DiscAmount
+						data.TotalPrice = detail.TotalPrice
 					}
 
 					var purchaseDetailModel model.PurchaseDetail
@@ -256,11 +256,8 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 					Price:          detail.GetPrice(),
 					DiscAmount:     detail.GetDiscAmount(),
 					DiscPercentage: detail.GetDiscPercentage(),
+					TotalPrice:     detail.GetTotalPrice(),
 				},
-			}
-
-			if purchaseDetailModel.Pb.GetDiscPercentage() > 0 {
-				purchaseDetailModel.Pb.DiscAmount = purchaseDetailModel.Pb.Price * float64(purchaseDetailModel.Pb.DiscPercentage) / 100
 			}
 
 			err = purchaseDetailModel.Create(ctx, tx)
@@ -286,10 +283,11 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 		}
 	}
 
-	purchaseModel.Pb.TotalPrice = sumPrice
+	purchaseModel.Pb.Price = sumPrice
 	if purchaseModel.Pb.AdditionalDiscPercentage > 0 {
 		purchaseModel.Pb.AdditionalDiscAmount = sumPrice * float64(purchaseModel.Pb.AdditionalDiscPercentage) / 100
 	}
+	purchaseModel.Pb.TotalPrice = sumPrice - purchaseModel.Pb.AdditionalDiscAmount
 
 	err = purchaseModel.Update(ctx, tx)
 	if err != nil {
@@ -352,7 +350,7 @@ func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.Purc
 		var createdAt, updatedAt time.Time
 		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName,
 			&pbPurchase.Code, &pbPurchase.PurchaseDate, &pbPurchase.Remark,
-			&pbPurchase.TotalPrice, &pbPurchase.AdditionalDiscAmount, &pbPurchase.AdditionalDiscPercentage,
+			&pbPurchase.Price, &pbPurchase.AdditionalDiscAmount, &pbPurchase.AdditionalDiscPercentage, &pbPurchase.TotalPrice,
 			&createdAt, &pbPurchase.CreatedBy, &updatedAt, &pbPurchase.UpdatedBy)
 		if err != nil {
 			return status.Errorf(codes.Internal, "scan data: %v", err)

@@ -23,7 +23,7 @@ type Purchase struct {
 func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	query := `
 		SELECT purchases.id, purchases.company_id, purchases.branch_id, purchases.branch_name, purchases.supplier_id, purchases.code, 
-		purchases.purchase_date, purchases.remark, purchases.total_price, purchases.additional_disc_amount, purchases.additional_disc_percentage,
+		purchases.purchase_date, purchases.remark, purchases.price, purchases.additional_disc_amount, purchases.additional_disc_percentage, purchases.total_price,
 		purchases.created_at, purchases.created_by, purchases.updated_at, purchases.updated_by,
 		json_agg(DISTINCT jsonb_build_object(
 			'id', purchase_details.id,
@@ -32,7 +32,8 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 			'price', purchase_details.price,
 			'disc_amount', purchase_details.disc_amount,
 			'disc_percentage', purchase_details.disc_percentage,
-			'quantity', purchase_details.quantity
+			'quantity', purchase_details.quantity,
+			'total_price', purchase_details.total_price
 		)) as details
 		FROM purchases 
 		JOIN purchase_details ON purchases.id = purchase_details.purchase_id
@@ -49,7 +50,7 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	var companyID, details string
 	err = stmt.QueryRowContext(ctx, u.Pb.GetId()).Scan(
 		&u.Pb.Id, &companyID, &u.Pb.BranchId, &u.Pb.BranchName, &u.Pb.GetSupplier().Id, &u.Pb.Code, &datePurchase, &u.Pb.Remark,
-		&u.Pb.TotalPrice, &u.Pb.AdditionalDiscAmount, &u.Pb.AdditionalDiscPercentage,
+		&u.Pb.Price, &u.Pb.AdditionalDiscAmount, &u.Pb.AdditionalDiscPercentage, &u.Pb.TotalPrice,
 		&createdAt, &u.Pb.CreatedBy, &updatedAt, &u.Pb.UpdatedBy, &details,
 	)
 
@@ -77,6 +78,7 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 		DiscAmount     float64
 		DiscPercentage float32
 		Quantity       int
+		TotalPrice     float64
 	}{}
 	err = json.Unmarshal([]byte(details), &detailPurchases)
 	if err != nil {
@@ -91,6 +93,7 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 			Price:          detail.Price,
 			DiscAmount:     detail.DiscAmount,
 			DiscPercentage: detail.DiscPercentage,
+			TotalPrice:     detail.TotalPrice,
 		})
 	}
 
@@ -100,7 +103,7 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 func (u *Purchase) GetByCode(ctx context.Context, db *sql.DB) error {
 	query := `
 		SELECT id, branch_id, branch_name, supplier_id, code, purchase_date, remark, 
-			total_price, additional_disc_amount, additional_disc_percentage, created_at, created_by, updated_at, updated_by 
+			price, additional_disc_amount, additional_disc_percentage, total_price, created_at, created_by, updated_at, updated_by 
 		FROM purchases WHERE purchases.code = $1 AND purchases.company_id = $2
 	`
 
@@ -113,7 +116,7 @@ func (u *Purchase) GetByCode(ctx context.Context, db *sql.DB) error {
 	var datePurchase, createdAt, updatedAt time.Time
 	err = stmt.QueryRowContext(ctx, u.Pb.GetCode(), ctx.Value(app.Ctx("companyID")).(string)).Scan(
 		&u.Pb.Id, &u.Pb.BranchId, &u.Pb.BranchName, &u.Pb.GetSupplier().Id, &u.Pb.Code, &datePurchase, &u.Pb.Remark,
-		&u.Pb.TotalPrice, &u.Pb.AdditionalDiscAmount, &u.Pb.AdditionalDiscPercentage,
+		&u.Pb.Price, &u.Pb.AdditionalDiscAmount, &u.Pb.AdditionalDiscPercentage, &u.Pb.TotalPrice,
 		&createdAt, &u.Pb.CreatedBy, &updatedAt, &u.Pb.UpdatedBy,
 	)
 
@@ -164,8 +167,8 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	query := `
-		INSERT INTO purchases (id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, total_price, additional_disc_amount, additional_disc_percentage, created_at, created_by, updated_at, updated_by) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		INSERT INTO purchases (id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, price, additional_disc_amount, additional_disc_percentage, total_price, created_at, created_by, updated_at, updated_by) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -182,9 +185,10 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 		u.Pb.GetCode(),
 		datePurchase,
 		u.Pb.GetRemark(),
-		u.Pb.GetTotalPrice(),
+		u.Pb.GetPrice(),
 		u.Pb.GetAdditionalDiscAmount(),
 		u.Pb.GetAdditionalDiscPercentage(),
+		u.Pb.GetTotalPrice(),
 		now,
 		u.Pb.GetCreatedBy(),
 		now,
@@ -206,6 +210,7 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 			DiscAmount:     detail.GetDiscAmount(),
 			DiscPercentage: detail.GetDiscPercentage(),
 			Quantity:       detail.GetQuantity(),
+			TotalPrice:     detail.GetTotalPrice(),
 		}
 		purchaseDetailModel.PbPurchase = purchases.Purchase{
 			Id:                       u.Pb.Id,
@@ -215,9 +220,10 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 			Code:                     u.Pb.Code,
 			PurchaseDate:             u.Pb.PurchaseDate,
 			Remark:                   u.Pb.Remark,
-			TotalPrice:               u.Pb.TotalPrice,
+			Price:                    u.Pb.Price,
 			AdditionalDiscAmount:     u.Pb.AdditionalDiscAmount,
 			AdditionalDiscPercentage: u.Pb.AdditionalDiscPercentage,
+			TotalPrice:               u.Pb.TotalPrice,
 			CreatedAt:                u.Pb.CreatedAt,
 			CreatedBy:                u.Pb.CreatedBy,
 			UpdatedAt:                u.Pb.UpdatedAt,
@@ -245,12 +251,13 @@ func (u *Purchase) Update(ctx context.Context, tx *sql.Tx) error {
 		supplier_id = $1,
 		purchase_date = $2,
 		remark = $3, 
-		total_price = $4,
+		price = $4,
 		additional_disc_amount = $5,
 		additional_disc_percentage = $6,
-		updated_at = $7, 
-		updated_by= $8
-		WHERE id = $9
+		total_price = $7,
+		updated_at = $8, 
+		updated_by= $9
+		WHERE id = $10
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -262,9 +269,10 @@ func (u *Purchase) Update(ctx context.Context, tx *sql.Tx) error {
 		u.Pb.GetSupplier().GetId(),
 		datePurchase,
 		u.Pb.GetRemark(),
-		u.Pb.GetTotalPrice(),
+		u.Pb.GetPrice(),
 		u.Pb.GetAdditionalDiscAmount(),
 		u.Pb.GetAdditionalDiscPercentage(),
+		u.Pb.GetTotalPrice(),
 		now,
 		u.Pb.GetUpdatedBy(),
 		u.Pb.GetId(),
@@ -280,7 +288,12 @@ func (u *Purchase) Update(ctx context.Context, tx *sql.Tx) error {
 
 func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.ListPurchaseRequest) (string, []interface{}, *purchases.PurchasePaginationResponse, error) {
 	var paginationResponse purchases.PurchasePaginationResponse
-	query := `SELECT id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, total_price, additional_disc_amount, additional_disc_percentage, created_at, created_by, updated_at, updated_by FROM purchases`
+	query := `
+		SELECT id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, 
+			price, additional_disc_amount, additional_disc_percentage, total_price, 
+			created_at, created_by, updated_at, updated_by 
+		FROM purchases
+	`
 
 	where := []string{"company_id = $1"}
 	paramQueries := []interface{}{ctx.Value(app.Ctx("companyID")).(string)}
@@ -336,25 +349,43 @@ func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.List
 	return query, paramQueries, &paginationResponse, nil
 }
 
-func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB) ([]*purchases.PurchaseDetail, error) {
+func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB, purchaseReturnId *string) ([]*purchases.PurchaseDetail, error) {
 	var list []*purchases.PurchaseDetail
+
+	queryReturn := `
+		SELECT purchase_return_details.product_id, SUM(purchase_return_details.quantity) return_quantity  
+		FROM purchase_returns
+		JOIN purchase_return_details ON purchase_returns.id = purchase_return_details.purchase_return_id
+		WHERE purchase_returns.purchase_id = $1 
+	`
+	if purchaseReturnId != nil {
+		queryReturn += ` AND purchase_returns.id != $3`
+	}
+
+	queryReturn += ` GROUP BY purchase_return_details.product_id`
 
 	query := `
 		SELECT purchase_details.product_id, (purchase_details.quantity - purchase_returns.return_quantity) quantity 
 		FROM purchase_details 
 		JOIN purchases ON purchase_details.purchase_id = purchases.id
 		JOIN (
-			SELECT purchase_return_details.product_id, SUM(purchase_return_details.quantity) return_quantity  
-			FROM purchase_returns
-			JOIN purchase_return_details ON purchase_returns.id = purchase_return_details.purchase_return_id
-			WHERE purchase_returns.purchase_id = $1 
-			GROUP BY purchase_return_details.product_id
+			` + queryReturn + `
 		) AS purchase_returns ON purchase_details.product_id = purchase_returns.product_id
 		WHERE purchase_details.purchase_id = $1 
 			AND (purchase_details.quantity - purchase_returns.return_quantity) > 0		
 			AND purchases.company_id = $2
 	`
-	rows, err := db.QueryContext(ctx, query, u.Pb.Id, ctx.Value(app.Ctx("companyID")).(string))
+
+	params := []interface{}{
+		u.Pb.Id,
+		ctx.Value(app.Ctx("companyID")).(string),
+	}
+
+	if purchaseReturnId != nil {
+		params = append(params, *purchaseReturnId)
+	}
+
+	rows, err := db.QueryContext(ctx, query, params...)
 	if err != nil {
 		return list, status.Error(codes.Internal, err.Error())
 	}

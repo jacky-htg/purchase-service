@@ -132,8 +132,12 @@ func (u *PurchaseReturn) Create(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	query := `
-		INSERT INTO purchase_returns (id, company_id, branch_id, branch_name, purchase_id, code, return_date, remark, created_at, created_by, updated_at, updated_by) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO purchase_returns (
+			id, company_id, branch_id, branch_name, purchase_id, code, return_date, remark, 
+			total_price, additional_disc_amount, additional_disc_percentage, 
+			created_at, created_by, updated_at, updated_by
+		) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -150,6 +154,9 @@ func (u *PurchaseReturn) Create(ctx context.Context, tx *sql.Tx) error {
 		u.Pb.GetCode(),
 		dateReturn,
 		u.Pb.GetRemark(),
+		u.Pb.GetTotalPrice(),
+		u.Pb.GetAdditionalDiscAmount(),
+		u.Pb.GetAdditionalDiscPercentage(),
 		now,
 		u.Pb.GetCreatedBy(),
 		now,
