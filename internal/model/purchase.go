@@ -407,3 +407,31 @@ func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB, purchaseRe
 
 	return list, nil
 }
+
+func (u *Purchase) GetReturnAdditionalDisc(ctx context.Context, db *sql.DB) (float64, error) {
+	var returnAdditionalDisc float64
+	query := `
+		SELECT SUM(purchase_returns.additional_disc_amount) return_additional_disc
+		FROM purchases
+		JOIN purchase_returns ON purchases.id = purchase_returns.purchase_id
+		WHERE purchases.id = $1
+		GROUP BY purchases.id
+	`
+	stmt, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return returnAdditionalDisc, status.Errorf(codes.Internal, "Prepare statement Get purchase: %v", err)
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRowContext(ctx, u.Pb.GetId()).Scan(&returnAdditionalDisc)
+
+	if err == sql.ErrNoRows {
+		return returnAdditionalDisc, nil
+	}
+
+	if err != nil {
+		return returnAdditionalDisc, status.Errorf(codes.Internal, "Query Raw get returnAdditionalDisc: %v", err)
+	}
+
+	return returnAdditionalDisc, nil
+}

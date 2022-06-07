@@ -49,6 +49,10 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	// validate not any receiving order yet
 	mReceive := model.Receive{Client: u.ReceiveClient}
 	hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.Purchase.Id)
+	if err != nil {
+		return &purchaseReturnModel.Pb, err
+	}
+
 	if hasReceive {
 		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has receive transaction ")
 	}
@@ -62,11 +66,12 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 
 	err = mPurchase.Get(ctx, u.Db)
 	if err != nil {
-		return &purchaseReturnModel.Pb, status.Error(codes.Internal, "Failed Get Purchase")
+		return &purchaseReturnModel.Pb, err
 	}
 
 	var sumPrice float64
-	for i, detail := range in.GetDetails() {
+	var purchaseQty, returnQty int32
+	for _, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
@@ -76,16 +81,22 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		}
 
 		for _, p := range mPurchase.Pb.GetDetails() {
+			purchaseQty += p.Quantity
 			if p.GetProductId() == detail.ProductId {
-				in.GetDetails()[i].Price = p.Price
-				// TODO : jaga kalau ada disc amount tanpa percentage
+				detail.Price = p.Price
 				if p.DiscPercentage > 0 {
-					in.GetDetails()[i].DiscPercentage = p.DiscPercentage
-					in.GetDetails()[i].DiscAmount = p.GetPrice() * float64(p.DiscPercentage) / 100
+					detail.DiscPercentage = p.DiscPercentage
+					detail.DiscAmount = p.GetPrice() * float64(p.DiscPercentage) / 100
+				} else if p.DiscAmount > 0 {
+					detail.DiscAmount = p.DiscAmount
 				}
+				detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
+				break
 			}
 		}
-		sumPrice += detail.GetPrice()
+
+		returnQty += detail.Quantity
+		sumPrice += detail.TotalPrice
 	}
 
 	mBranch := model.Branch{
@@ -104,14 +115,35 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		return &purchaseReturnModel.Pb, err
 	}
 
+	in.Price = sumPrice
+	if mPurchase.Pb.AdditionalDiscPercentage > 0 {
+		in.AdditionalDiscAmount = in.Price * float64(in.AdditionalDiscPercentage) / 100
+	} else if mPurchase.Pb.AdditionalDiscAmount > 0 {
+		additionalDiscPerQty := mPurchase.Pb.AdditionalDiscAmount / float64(purchaseQty)
+		in.AdditionalDiscAmount = additionalDiscPerQty * float64(returnQty)
+		returnAdditionalDisc, err := mPurchase.GetReturnAdditionalDisc(ctx, u.Db)
+		if err != nil {
+			return &purchaseReturnModel.Pb, status.Error(codes.Internal, "Error get return additional disc")
+		}
+		remainingAdditionalDisc := mPurchase.Pb.AdditionalDiscAmount - returnAdditionalDisc
+		if in.AdditionalDiscAmount > remainingAdditionalDisc {
+			in.AdditionalDiscAmount = remainingAdditionalDisc
+		}
+	}
+	in.TotalPrice = in.Price - in.AdditionalDiscAmount
+
 	purchaseReturnModel.Pb = purchases.PurchaseReturn{
-		BranchId:   in.GetBranchId(),
-		BranchName: mBranch.Pb.GetName(),
-		Code:       in.GetCode(),
-		ReturnDate: in.GetReturnDate(),
-		Purchase:   in.GetPurchase(),
-		Remark:     in.GetRemark(),
-		Details:    in.GetDetails(),
+		BranchId:                 in.GetBranchId(),
+		BranchName:               mBranch.Pb.GetName(),
+		Code:                     in.GetCode(),
+		ReturnDate:               in.GetReturnDate(),
+		Purchase:                 in.GetPurchase(),
+		Remark:                   in.GetRemark(),
+		Price:                    in.GetPrice(),
+		AdditionalDiscAmount:     in.GetAdditionalDiscAmount(),
+		AdditionalDiscPercentage: in.GetAdditionalDiscPercentage(),
+		TotalPrice:               in.GetTotalPrice(),
+		Details:                  in.GetDetails(),
 	}
 
 	tx, err := u.Db.BeginTx(ctx, nil)
@@ -125,7 +157,10 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 		return &purchaseReturnModel.Pb, err
 	}
 
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return &purchaseReturnModel.Pb, status.Error(codes.Internal, "Error when commit transaction")
+	}
 
 	return &purchaseReturnModel.Pb, nil
 }
@@ -183,13 +218,14 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has been returned ")
 	}
 
-	err = purchaseReturnModel.Get(ctx, u.Db)
+	err = mPurchase.Get(ctx, u.Db)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
 	}
 
-	if len(in.GetPurchase().GetId()) > 0 {
-		purchaseReturnModel.Pb.Purchase = in.GetPurchase()
+	err = purchaseReturnModel.Get(ctx, u.Db)
+	if err != nil {
+		return &purchaseReturnModel.Pb, err
 	}
 
 	if _, err := time.Parse("2006-01-02T15:04:05.000Z", in.GetReturnDate()); err == nil {
@@ -201,12 +237,8 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 		return &purchaseReturnModel.Pb, status.Errorf(codes.Internal, "begin transaction: %v", err)
 	}
 
-	err = purchaseReturnModel.Update(ctx, tx)
-	if err != nil {
-		tx.Rollback()
-		return &purchaseReturnModel.Pb, err
-	}
-
+	var sumPrice float64
+	var purchaseQty, returnQty int32
 	var newDetails []*purchases.PurchaseReturnDetail
 	for _, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
@@ -219,30 +251,27 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 		}
 
 		if len(detail.GetId()) > 0 {
-			// operasi update
-			purchaseReturnDetailModel := model.PurchaseReturnDetail{}
-			purchaseReturnDetailModel.Pb.Id = detail.GetId()
-			purchaseReturnDetailModel.Pb.PurchaseReturnId = purchaseReturnModel.Pb.GetId()
-			err = purchaseReturnDetailModel.Get(ctx, tx)
-			if err != nil {
-				tx.Rollback()
-				return &purchaseReturnModel.Pb, err
+			for _, p := range mPurchase.Pb.GetDetails() {
+				purchaseQty += p.Quantity
+				if p.GetProductId() == detail.ProductId {
+					break
+				}
 			}
 
-			purchaseReturnDetailModel.PbPurchaseReturn = purchases.PurchaseReturn{
-				Id:         purchaseReturnModel.Pb.Id,
-				BranchId:   purchaseReturnModel.Pb.BranchId,
-				BranchName: purchaseReturnModel.Pb.BranchName,
-				Purchase:   purchaseReturnModel.Pb.GetPurchase(),
-				Code:       purchaseReturnModel.Pb.Code,
-				ReturnDate: purchaseReturnModel.Pb.ReturnDate,
-				Remark:     purchaseReturnModel.Pb.Remark,
-				CreatedAt:  purchaseReturnModel.Pb.CreatedAt,
-				CreatedBy:  purchaseReturnModel.Pb.CreatedBy,
-				UpdatedAt:  purchaseReturnModel.Pb.UpdatedAt,
-				UpdatedBy:  purchaseReturnModel.Pb.UpdatedBy,
-				Details:    purchaseReturnModel.Pb.Details,
+			returnQty += detail.Quantity
+			detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
+			sumPrice += detail.TotalPrice
+
+			// operasi update
+			purchaseReturnDetailModel := model.PurchaseReturnDetail{
+				Pb: purchases.PurchaseReturnDetail{
+					Id:               detail.Id,
+					Quantity:         detail.Quantity,
+					TotalPrice:       detail.TotalPrice,
+					PurchaseReturnId: purchaseReturnModel.Pb.Id,
+				},
 			}
+
 			err = purchaseReturnDetailModel.Update(ctx, tx)
 			if err != nil {
 				tx.Rollback()
@@ -258,12 +287,33 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 			}
 
 		} else {
+			for _, p := range mPurchase.Pb.GetDetails() {
+				purchaseQty += p.Quantity
+				if p.GetProductId() == detail.ProductId {
+					detail.Price = p.Price
+					if p.DiscPercentage > 0 {
+						detail.DiscPercentage = p.DiscPercentage
+						detail.DiscAmount = p.GetPrice() * float64(p.DiscPercentage) / 100
+					} else if p.DiscAmount > 0 {
+						detail.DiscAmount = p.DiscAmount
+					}
+					detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
+					break
+				}
+			}
+
+			returnQty += detail.Quantity
+			sumPrice += detail.TotalPrice
+
 			// operasi insert
 			purchaseReturnDetailModel := model.PurchaseReturnDetail{Pb: purchases.PurchaseReturnDetail{
 				PurchaseReturnId: purchaseReturnModel.Pb.GetId(),
 				ProductId:        detail.GetProductId(),
-				ProductCode:      detail.GetProductCode(),
-				ProductName:      detail.GetProductName(),
+				Quantity:         detail.GetQuantity(),
+				Price:            detail.GetPrice(),
+				DiscAmount:       detail.GetDiscAmount(),
+				DiscPercentage:   detail.GetDiscPercentage(),
+				TotalPrice:       detail.GetTotalPrice(),
 			}}
 			purchaseReturnDetailModel.PbPurchaseReturn = purchases.PurchaseReturn{
 				Id:         purchaseReturnModel.Pb.Id,
@@ -302,7 +352,16 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 		}
 	}
 
-	tx.Commit()
+	err = purchaseReturnModel.Update(ctx, tx)
+	if err != nil {
+		tx.Rollback()
+		return &purchaseReturnModel.Pb, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return &purchaseReturnModel.Pb, status.Error(codes.Internal, "failed commit transaction")
+	}
 
 	return &purchaseReturnModel.Pb, nil
 }
@@ -335,6 +394,7 @@ func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream pu
 		var createdAt, updatedAt time.Time
 		err = rows.Scan(&pbPurchaseReturn.Id, &companyID, &pbPurchaseReturn.BranchId, &pbPurchaseReturn.BranchName,
 			&pbPurchaseReturn.Code, &pbPurchaseReturn.ReturnDate, &pbPurchaseReturn.Remark,
+			&pbPurchaseReturn.Price, &pbPurchaseReturn.AdditionalDiscAmount, &pbPurchaseReturn.AdditionalDiscPercentage, &pbPurchaseReturn.TotalPrice,
 			&createdAt, &pbPurchaseReturn.CreatedBy, &updatedAt, &pbPurchaseReturn.UpdatedBy)
 		if err != nil {
 			return status.Errorf(codes.Internal, "scan data: %v", err)

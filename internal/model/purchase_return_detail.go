@@ -18,7 +18,8 @@ type PurchaseReturnDetail struct {
 
 func (u *PurchaseReturnDetail) Get(ctx context.Context, tx *sql.Tx) error {
 	query := `
-		SELECT purchase_return_details.id, purchase_returns.company_id, purchase_return_details.purchase_return_id, purchase_return_details.product_id, 
+		SELECT purchase_return_details.id, purchase_returns.company_id, purchase_return_details.purchase_return_id, purchase_return_details.product_id, purchase_return_details.quantity,
+			purchase_return_details.price, purchase_return_details.disc_amount, purchase_return_details.disc_percentage, purchase_return_details.total_price
 		FROM purchase_return_details 
 		JOIN purchase_returns ON purchase_return_details.purchase_return_id = purchase_returns.id
 		WHERE purchase_return_details.id = $1 AND purchase_return_details.purchase_return_id = $2
@@ -32,7 +33,8 @@ func (u *PurchaseReturnDetail) Get(ctx context.Context, tx *sql.Tx) error {
 
 	var companyID string
 	err = stmt.QueryRowContext(ctx, u.Pb.GetId(), u.Pb.GetPurchaseReturnId()).Scan(
-		&u.Pb.Id, &companyID, &u.Pb.PurchaseReturnId, &u.Pb.ProductId,
+		&u.Pb.Id, &companyID, &u.Pb.PurchaseReturnId, &u.Pb.ProductId, &u.Pb.Quantity,
+		&u.Pb.Price, &u.Pb.DiscAmount, &u.Pb.DiscPercentage, &u.Pb.TotalPrice,
 	)
 
 	if err == sql.ErrNoRows {
@@ -53,8 +55,8 @@ func (u *PurchaseReturnDetail) Get(ctx context.Context, tx *sql.Tx) error {
 func (u *PurchaseReturnDetail) Create(ctx context.Context, tx *sql.Tx) error {
 	u.Pb.Id = uuid.New().String()
 	query := `
-		INSERT INTO purchase_return_details (id, purchase_return_id, product_id) 
-		VALUES ($1, $2, $3)
+		INSERT INTO purchase_return_details (id, purchase_return_id, product_id, quantity, price, disc_amount, disc_percentage, total_price) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -66,6 +68,11 @@ func (u *PurchaseReturnDetail) Create(ctx context.Context, tx *sql.Tx) error {
 		u.Pb.GetId(),
 		u.Pb.GetPurchaseReturnId(),
 		u.Pb.GetProductId(),
+		u.Pb.Quantity,
+		u.Pb.Price,
+		u.Pb.DiscAmount,
+		u.Pb.DiscPercentage,
+		u.Pb.TotalPrice,
 	)
 	if err != nil {
 		return status.Errorf(codes.Internal, "Exec insert purchase return detail: %v", err)
@@ -77,8 +84,9 @@ func (u *PurchaseReturnDetail) Create(ctx context.Context, tx *sql.Tx) error {
 func (u *PurchaseReturnDetail) Update(ctx context.Context, tx *sql.Tx) error {
 	query := `
 		UPDATE purchase_return_details SET
-		product_id = $1
-		WHERE id = $2
+		quantity = $1,
+		total_price = $2
+		WHERE id = $3
 	`
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
@@ -87,7 +95,8 @@ func (u *PurchaseReturnDetail) Update(ctx context.Context, tx *sql.Tx) error {
 	defer stmt.Close()
 
 	_, err = stmt.ExecContext(ctx,
-		u.Pb.GetProductId(),
+		u.Pb.GetQuantity(),
+		u.Pb.TotalPrice,
 		u.Pb.GetId(),
 	)
 	if err != nil {
