@@ -62,7 +62,7 @@ var migrations = []darwin.Migration{
 			quantity INT NOT NULL CHECK (quantity > 0),
 			disc_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
 			disc_percentage REAL NOT NULL DEFAULT 0,
-			total_price DOUBLE PRECICION NOT NULL,
+			total_price DOUBLE PRECISION NOT NULL,
 			UNIQUE(purchase_id, product_id),
 			CONSTRAINT fk_purchase_details_to_purchases FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE ON UPDATE CASCADE
 		);`,
@@ -104,7 +104,7 @@ var migrations = []darwin.Migration{
 			quantity INT NOT NULL CHECK (quantity > 0),
 			disc_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
 			disc_percentage REAL NOT NULL DEFAULT 0,
-			total_price DOUBLE PRECICION NOT NULL,
+			total_price DOUBLE PRECISION NOT NULL,
 			UNIQUE(purchase_return_id, product_id),
 			CONSTRAINT fk_purchase_return_details_to_purchase_returns FOREIGN KEY (purchase_return_id) REFERENCES purchase_returns(id) ON DELETE CASCADE ON UPDATE CASCADE
 		);`,
