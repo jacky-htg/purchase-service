@@ -31,4 +31,9 @@ func GrpcRoute(grpcServer *grpc.Server, db *sql.DB, log *logrus.Entry, userConn 
 		ReceiveClient: inventories.NewReceiveServiceClient(inventoryConn),
 	}
 	purchases.RegisterPurchaseReturnServiceServer(grpcServer, &purchaseReturnServer)
+
+	supplierServer := service.Supplier{
+		Db: db,
+	}
+	purchases.RegisterSupplierServiceServer(grpcServer, &supplierServer)
 }
