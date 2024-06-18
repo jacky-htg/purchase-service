@@ -18,7 +18,7 @@ type Supplier struct {
 	purchases.UnimplementedSupplierServiceServer
 }
 
-func (u *Supplier) Create(ctx context.Context, in *purchases.Supplier) (*purchases.Supplier, error) {
+func (u *Supplier) SupplierCreate(ctx context.Context, in *purchases.Supplier) (*purchases.Supplier, error) {
 	var supplierModel model.Supplier
 	var err error
 
@@ -73,7 +73,7 @@ func (u *Supplier) Create(ctx context.Context, in *purchases.Supplier) (*purchas
 	return &supplierModel.Pb, nil
 }
 
-func (u *Supplier) Update(ctx context.Context, in *purchases.Supplier) (*purchases.Supplier, error) {
+func (u *Supplier) SupplierUpdate(ctx context.Context, in *purchases.Supplier) (*purchases.Supplier, error) {
 	var supplierModel model.Supplier
 	var err error
 
@@ -112,7 +112,7 @@ func (u *Supplier) Update(ctx context.Context, in *purchases.Supplier) (*purchas
 	return &supplierModel.Pb, nil
 }
 
-func (u *Supplier) View(ctx context.Context, in *purchases.Id) (*purchases.Supplier, error) {
+func (u *Supplier) SupplierView(ctx context.Context, in *purchases.Id) (*purchases.Supplier, error) {
 	var supplierModel model.Supplier
 	var err error
 
@@ -134,7 +134,7 @@ func (u *Supplier) View(ctx context.Context, in *purchases.Id) (*purchases.Suppl
 	return &supplierModel.Pb, nil
 }
 
-func (u *Supplier) Delete(ctx context.Context, in *purchases.Id) (*purchases.MyBoolean, error) {
+func (u *Supplier) SupplierDelete(ctx context.Context, in *purchases.Id) (*purchases.MyBoolean, error) {
 	var output purchases.MyBoolean
 	output.Boolean = false
 
@@ -165,7 +165,7 @@ func (u *Supplier) Delete(ctx context.Context, in *purchases.Id) (*purchases.MyB
 	return &output, nil
 }
 
-func (u *Supplier) List(in *purchases.Pagination, stream purchases.SupplierService_SupplierListServer) error {
+func (u *Supplier) SupplierList(in *purchases.ListSupplierRequest, stream purchases.SupplierService_SupplierListServer) error {
 	ctx := stream.Context()
 	ctx, err := app.GetMetadata(ctx)
 	if err != nil {
@@ -173,14 +173,17 @@ func (u *Supplier) List(in *purchases.Pagination, stream purchases.SupplierServi
 	}
 
 	var supplierModel model.Supplier
-	query, paramQueries, paginationResponse, err := supplierModel.ListQuery(ctx, u.Db, in)
+	query, paramQueries, paginationResponse, err := supplierModel.ListQuery(ctx, u.Db, in.Pagination)
+	if err != nil {
+		return err
+	}
 
 	rows, err := u.Db.QueryContext(ctx, query, paramQueries...)
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
 	defer rows.Close()
-	paginationResponse.Pagination = in
+	paginationResponse.Pagination = in.Pagination
 
 	for rows.Next() {
 		err := app.ContextError(ctx)
