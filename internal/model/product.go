@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"io"
-	"log"
 	"purchase/internal/pkg/app"
 	"purchase/pb/inventories"
 
@@ -19,7 +18,7 @@ type Product struct {
 
 func (u *Product) Get(ctx context.Context) error {
 	product, err := u.Client.View(app.SetMetadata(ctx), &inventories.Id{Id: u.Id})
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Product.Get service: %s", err)
 		}
@@ -36,7 +35,7 @@ func (u *Product) List(ctx context.Context, in *inventories.ListProductRequest) 
 	var response []*inventories.ListProductResponse
 	streamClient, err := u.Client.List(app.SetMetadata(ctx), in)
 
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Product.List service: %s", err)
 		}
@@ -47,7 +46,6 @@ func (u *Product) List(ctx context.Context, in *inventories.ListProductRequest) 
 	for {
 		resp, err := streamClient.Recv()
 		if err == io.EOF {
-			log.Print("end stream")
 			break
 		}
 		if err != nil {

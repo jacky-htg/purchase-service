@@ -25,11 +25,11 @@ type Purchase struct {
 	purchases.UnimplementedPurchaseServiceServer
 }
 
-func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchases.Purchase, error) {
+func (u *Purchase) PurchaseCreate(ctx context.Context, in *purchases.Purchase) (*purchases.Purchase, error) {
 	var purchaseModel model.Purchase
 	var err error
 
-	// TODO : if this month any closing account, create transaction for thus month will be blocked
+	// TODO : if this month any closing account, create transaction for this month will be blocked
 
 	ctx, err = app.GetMetadata(ctx)
 	if err != nil {
@@ -106,7 +106,7 @@ func (u *Purchase) Create(ctx context.Context, in *purchases.Purchase) (*purchas
 	return &purchaseModel.Pb, nil
 }
 
-func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchases.Purchase, error) {
+func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (*purchases.Purchase, error) {
 	var purchaseModel model.Purchase
 	var err error
 
@@ -300,7 +300,7 @@ func (u *Purchase) Update(ctx context.Context, in *purchases.Purchase) (*purchas
 	return &purchaseModel.Pb, nil
 }
 
-func (u *Purchase) View(ctx context.Context, in *purchases.Id) (*purchases.Purchase, error) {
+func (u *Purchase) PurchaseView(ctx context.Context, in *purchases.Id) (*purchases.Purchase, error) {
 	var purchaseModel model.Purchase
 	var err error
 
@@ -322,7 +322,7 @@ func (u *Purchase) View(ctx context.Context, in *purchases.Id) (*purchases.Purch
 	return &purchaseModel.Pb, nil
 }
 
-func (u *Purchase) List(in *purchases.ListPurchaseRequest, stream purchases.PurchaseService_PurchaseListServer) error {
+func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purchases.PurchaseService_PurchaseListServer) error {
 	ctx := stream.Context()
 	ctx, err := app.GetMetadata(ctx)
 	if err != nil {
@@ -377,7 +377,7 @@ func (u *Purchase) createValidation(ctx context.Context, in *purchases.Purchase)
 		return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid branch")
 	}
 
-	if len(in.GetSupplier().Id) == 0 {
+	if in.GetSupplier() == nil || len(in.GetSupplier().Id) == 0 {
 		return []*inventories.ListProductResponse{}, status.Error(codes.InvalidArgument, "Please supply valid supplier")
 	}
 

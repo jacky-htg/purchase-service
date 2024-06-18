@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"io"
-	"log"
 	"purchase/internal/pkg/app"
 	"purchase/pb/inventories"
 
@@ -17,7 +16,7 @@ type Receive struct {
 
 func (u *Receive) HasTransactionByPurchase(ctx context.Context, purchaseId string) (bool, error) {
 	streamClient, err := u.Client.List(app.SetMetadata(ctx), &inventories.ListReceiveRequest{PurchaseId: purchaseId})
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Purchase.HasTreansaction service: %s", err)
 		}
@@ -29,7 +28,6 @@ func (u *Receive) HasTransactionByPurchase(ctx context.Context, purchaseId strin
 	for {
 		resp, err := streamClient.Recv()
 		if err == io.EOF {
-			log.Print("end stream")
 			break
 		}
 		if err != nil {

@@ -69,7 +69,7 @@ func checkYourBranch(branches []*users.Branch, branchID string) error {
 
 func getUserLogin(ctx context.Context, userClient users.UserServiceClient) (*users.User, error) {
 	userLogin, err := userClient.View(app.SetMetadata(ctx), &users.Id{Id: ctx.Value(app.Ctx("userID")).(string)})
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling user.Get service: %s", err)
 		}
@@ -83,7 +83,7 @@ func getUserLogin(ctx context.Context, userClient users.UserServiceClient) (*use
 func getRegion(ctx context.Context, regionClient users.RegionServiceClient, r *users.Region) (*users.Region, error) {
 	region, err := regionClient.View(app.SetMetadata(ctx), &users.Id{Id: r.GetId()})
 
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Region.Get service: %s", err)
 		}
@@ -99,7 +99,7 @@ func getBranches(ctx context.Context, branchClient users.BranchServiceClient) ([
 	var err error
 	stream, err := branchClient.List(app.SetMetadata(ctx), &users.ListBranchRequest{})
 
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Branches.List service: %s", err)
 		}
@@ -122,7 +122,7 @@ func getBranches(ctx context.Context, branchClient users.BranchServiceClient) ([
 
 func (u *Branch) Get(ctx context.Context) error {
 	branch, err := u.BranchClient.View(app.SetMetadata(ctx), &users.Id{Id: u.Id})
-	if s, ok := status.FromError(err); ok {
+	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Branch.Get service: %s", err)
 		}
