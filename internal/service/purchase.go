@@ -346,9 +346,10 @@ func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purcha
 		}
 
 		var pbPurchase purchases.Purchase
+		var pbSupplier purchases.Supplier
 		var companyID string
 		var createdAt, updatedAt time.Time
-		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName,
+		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName, &pbSupplier.Id,
 			&pbPurchase.Code, &pbPurchase.PurchaseDate, &pbPurchase.Remark,
 			&pbPurchase.Price, &pbPurchase.AdditionalDiscAmount, &pbPurchase.AdditionalDiscPercentage, &pbPurchase.TotalPrice,
 			&createdAt, &pbPurchase.CreatedBy, &updatedAt, &pbPurchase.UpdatedBy)
@@ -358,6 +359,7 @@ func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purcha
 
 		pbPurchase.CreatedAt = createdAt.String()
 		pbPurchase.UpdatedAt = updatedAt.String()
+		pbPurchase.Supplier = &pbSupplier
 
 		res := &purchases.ListPurchaseResponse{
 			Pagination: paginationResponse,
