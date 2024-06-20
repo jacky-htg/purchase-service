@@ -322,6 +322,17 @@ func (u *Purchase) PurchaseView(ctx context.Context, in *purchases.Id) (*purchas
 		return &purchaseModel.Pb, err
 	}
 
+	mBranch := model.Branch{
+		UserClient:   u.UserClient,
+		RegionClient: u.RegionClient,
+		BranchClient: u.BranchClient,
+		Id:           purchaseModel.Pb.BranchId,
+	}
+	err = mBranch.IsYourBranch(ctx)
+	if err != nil {
+		return &purchaseModel.Pb, err
+	}
+
 	return &purchaseModel.Pb, nil
 }
 

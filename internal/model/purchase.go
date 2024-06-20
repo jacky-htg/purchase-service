@@ -22,7 +22,7 @@ type Purchase struct {
 
 func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	query := `
-		SELECT purchases.id, purchases.company_id, purchases.branch_id, purchases.branch_name, purchases.supplier_id, purchases.code, 
+		SELECT purchases.id, purchases.company_id, purchases.branch_id, purchases.branch_name, suppliers.id, suppliers.name, purchases.code, 
 		purchases.purchase_date, purchases.remark, purchases.price, purchases.additional_disc_amount, purchases.additional_disc_percentage, purchases.total_price,
 		purchases.created_at, purchases.created_by, purchases.updated_at, purchases.updated_by,
 		json_agg(DISTINCT jsonb_build_object(
@@ -35,9 +35,10 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 			'quantity', purchase_details.quantity,
 			'total_price', purchase_details.total_price
 		)) as details
-		FROM purchases 
+		FROM purchases JOIN suppliers ON purchases.supplier_id = suppliers.id
 		JOIN purchase_details ON purchases.id = purchase_details.purchase_id
 		WHERE purchases.id = $1
+		GROUP BY purchases.id, suppliers.id
 	`
 
 	stmt, err := db.PrepareContext(ctx, query)
@@ -48,8 +49,10 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 
 	var datePurchase, createdAt, updatedAt time.Time
 	var companyID, details string
+	var pbSupplier purchases.Supplier
 	err = stmt.QueryRowContext(ctx, u.Pb.GetId()).Scan(
-		&u.Pb.Id, &companyID, &u.Pb.BranchId, &u.Pb.BranchName, &u.Pb.GetSupplier().Id, &u.Pb.Code, &datePurchase, &u.Pb.Remark,
+		&u.Pb.Id, &companyID, &u.Pb.BranchId, &u.Pb.BranchName, &pbSupplier.Id, &pbSupplier.Name,
+		&u.Pb.Code, &datePurchase, &u.Pb.Remark,
 		&u.Pb.Price, &u.Pb.AdditionalDiscAmount, &u.Pb.AdditionalDiscPercentage, &u.Pb.TotalPrice,
 		&createdAt, &u.Pb.CreatedBy, &updatedAt, &u.Pb.UpdatedBy, &details,
 	)
@@ -67,18 +70,19 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 	}
 
 	u.Pb.PurchaseDate = datePurchase.String()
+	u.Pb.Supplier = &pbSupplier
 	u.Pb.CreatedAt = createdAt.String()
 	u.Pb.UpdatedAt = updatedAt.String()
 
 	detailPurchases := []struct {
-		ID             string
+		ID             string `json:"id"`
 		PurchaseID     string
-		ProductID      string
+		ProductID      string `json:"product_id"`
 		Price          float64
-		DiscAmount     float64
-		DiscPercentage float32
-		Quantity       int
-		TotalPrice     float64
+		DiscAmount     float64 `json:"disc_amount"`
+		DiscPercentage float32 `json:"disc_percentage"`
+		Quantity       int     `json:"quantity"`
+		TotalPrice     float64 `json:"total_price"`
 	}{}
 	err = json.Unmarshal([]byte(details), &detailPurchases)
 	if err != nil {
@@ -91,6 +95,7 @@ func (u *Purchase) Get(ctx context.Context, db *sql.DB) error {
 			ProductId:      detail.ProductID,
 			PurchaseId:     detail.PurchaseID,
 			Price:          detail.Price,
+			Quantity:       int32(detail.Quantity),
 			DiscAmount:     detail.DiscAmount,
 			DiscPercentage: detail.DiscPercentage,
 			TotalPrice:     detail.TotalPrice,
