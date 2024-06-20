@@ -173,7 +173,7 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 		return &purchaseModel.Pb, status.Errorf(codes.Internal, "begin transaction: %v", err)
 	}
 
-	var newDetails []*purchases.PurchaseDetail
+	//var newDetails []*purchases.PurchaseDetail
 	var productIds []string
 	for _, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
@@ -193,6 +193,9 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 		Ids: productIds,
 	}
 	products, err := mProduct.List(ctx, &inProductList)
+	if err != nil {
+		return &purchaseModel.Pb, err
+	}
 
 	if len(products) != len(productIds) {
 		return &purchaseModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
@@ -266,7 +269,7 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 				return &purchaseModel.Pb, err
 			}
 
-			newDetails = append(newDetails, &purchaseDetailModel.Pb)
+			//newDetails = append(newDetails, &purchaseDetailModel.Pb)
 		}
 	}
 
@@ -331,6 +334,9 @@ func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purcha
 
 	var purchaseModel model.Purchase
 	query, paramQueries, paginationResponse, err := purchaseModel.ListQuery(ctx, u.Db, in)
+	if err != nil {
+		return err
+	}
 
 	rows, err := u.Db.QueryContext(ctx, query, paramQueries...)
 	if err != nil {
@@ -349,7 +355,8 @@ func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purcha
 		var pbSupplier purchases.Supplier
 		var companyID string
 		var createdAt, updatedAt time.Time
-		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName, &pbSupplier.Id,
+		err = rows.Scan(&pbPurchase.Id, &companyID, &pbPurchase.BranchId, &pbPurchase.BranchName,
+			&pbSupplier.Id, &pbSupplier.Name,
 			&pbPurchase.Code, &pbPurchase.PurchaseDate, &pbPurchase.Remark,
 			&pbPurchase.Price, &pbPurchase.AdditionalDiscAmount, &pbPurchase.AdditionalDiscPercentage, &pbPurchase.TotalPrice,
 			&createdAt, &pbPurchase.CreatedBy, &updatedAt, &pbPurchase.UpdatedBy)

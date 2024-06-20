@@ -289,32 +289,34 @@ func (u *Purchase) Update(ctx context.Context, tx *sql.Tx) error {
 func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.ListPurchaseRequest) (string, []interface{}, *purchases.PurchasePaginationResponse, error) {
 	var paginationResponse purchases.PurchasePaginationResponse
 	query := `
-		SELECT id, company_id, branch_id, branch_name, supplier_id, code, purchase_date, remark, 
-			price, additional_disc_amount, additional_disc_percentage, total_price, 
-			created_at, created_by, updated_at, updated_by 
-		FROM purchases
+		SELECT purchases.id, purchases.company_id, purchases.branch_id, purchases.branch_name, 
+			purchases.supplier_id, suppliers.name supplier_name, purchases.code, purchases.purchase_date, 
+			purchases.remark, purchases.price, purchases.additional_disc_amount, 
+			purchases.additional_disc_percentage, purchases.total_price, 
+			purchases.created_at, purchases.created_by, purchases.updated_at, purchases.updated_by 
+		FROM purchases JOIN suppliers on purchases.supplier_id = suppliers.id
 	`
 
-	where := []string{"company_id = $1"}
+	where := []string{"purchases.company_id = $1"}
 	paramQueries := []interface{}{ctx.Value(app.Ctx("companyID")).(string)}
 
 	if len(in.GetBranchId()) > 0 {
 		paramQueries = append(paramQueries, in.GetBranchId())
-		where = append(where, fmt.Sprintf(`branch_id = $%d`, len(paramQueries)))
+		where = append(where, fmt.Sprintf(`purchases.branch_id = $%d`, len(paramQueries)))
 	}
 
 	if len(in.GetSupplierId()) > 0 {
 		paramQueries = append(paramQueries, in.GetSupplierId())
-		where = append(where, fmt.Sprintf(`supplier_id = $%d`, len(paramQueries)))
+		where = append(where, fmt.Sprintf(`purchases.supplier_id = $%d`, len(paramQueries)))
 	}
 
 	if len(in.GetPagination().GetSearch()) > 0 {
-		paramQueries = append(paramQueries, in.GetPagination().GetSearch())
-		where = append(where, fmt.Sprintf(`(code ILIKE $%d OR remark ILIKE $%d)`, len(paramQueries), len(paramQueries)))
+		paramQueries = append(paramQueries, "%"+in.GetPagination().GetSearch()+"%")
+		where = append(where, fmt.Sprintf(`(purchases.code ILIKE $%d OR purchases.remark ILIKE $%d)`, len(paramQueries), len(paramQueries)))
 	}
 
 	{
-		qCount := `SELECT COUNT(*) FROM purchases`
+		qCount := `SELECT COUNT(*) FROM purchases JOIN suppliers ON purchases.supplier_id = suppliers.id`
 		if len(where) > 0 {
 			qCount += " WHERE " + strings.Join(where, " AND ")
 		}
@@ -331,7 +333,7 @@ func (u *Purchase) ListQuery(ctx context.Context, db *sql.DB, in *purchases.List
 		query += ` WHERE ` + strings.Join(where, " AND ")
 	}
 
-	if len(in.GetPagination().GetOrderBy()) == 0 || !(in.GetPagination().GetOrderBy() == "code") {
+	if len(in.GetPagination().GetOrderBy()) == 0 || !(in.GetPagination().GetOrderBy() == "purchases.code") {
 		if in.GetPagination() == nil {
 			in.Pagination = &purchases.Pagination{OrderBy: "created_at"}
 		} else {
