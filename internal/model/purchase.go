@@ -150,7 +150,7 @@ func (u *Purchase) getCode(ctx context.Context, tx *sql.Tx) (string, error) {
 		return "", status.Error(codes.Internal, err.Error())
 	}
 
-	return fmt.Sprintf("DO%d%d%d",
+	return fmt.Sprintf("PC%d%d%d",
 		time.Now().UTC().Year(),
 		int(time.Now().UTC().Month()),
 		(count + 1)), nil
