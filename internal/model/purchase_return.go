@@ -109,7 +109,7 @@ func (u *PurchaseReturn) HasReturn(ctx context.Context, db *sql.DB) (bool, error
 		SELECT purchase_returns.id
 		FROM purchase_returns 
 		WHERE purchase_returns.purchase_id = $1 
-		LIMIT 0,1
+		LIMIT 1 OFFSET 0
 	`
 
 	stmt, err := db.PrepareContext(ctx, query)

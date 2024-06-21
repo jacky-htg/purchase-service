@@ -51,9 +51,9 @@ func (u *Purchase) PurchaseCreate(ctx context.Context, in *purchases.Purchase) (
 		}
 
 		if detail.DiscPercentage > 0 {
-			detail.DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
+			detail.DiscAmount = detail.GetPrice() * float64(detail.Quantity) * float64(detail.DiscPercentage) / 100
 		}
-		detail.TotalPrice = (detail.GetPrice() + detail.DiscAmount) * float64(detail.Quantity)
+		detail.TotalPrice = (detail.GetPrice() * float64(detail.Quantity)) - detail.DiscAmount
 		sumPrice += detail.TotalPrice
 	}
 
@@ -131,17 +131,17 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 		}
 	}
 
+	ctx, err = app.GetMetadata(ctx)
+	if err != nil {
+		return &purchaseModel.Pb, err
+	}
+
 	// if any receiving transaction, do update will be blocked
 	mReceive := model.Receive{Client: u.ReceiveClient}
 	if hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.GetId()); err != nil {
 		return &purchaseModel.Pb, err
 	} else if hasReceive {
 		return &purchaseModel.Pb, status.Error(codes.PermissionDenied, "Can not updated because the purchase has receiving transaction")
-	}
-
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseModel.Pb, err
 	}
 
 	err = purchaseModel.Get(ctx, u.Db)
@@ -211,10 +211,10 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 		}
 
 		if detail.DiscPercentage > 0 {
-			detail.DiscAmount = detail.GetPrice() * float64(detail.DiscPercentage) / 100
+			detail.DiscAmount = detail.GetPrice() * float64(detail.Quantity) * float64(detail.DiscPercentage) / 100
 		}
-		detail.TotalPrice = (detail.GetPrice() - detail.DiscAmount) * float64(detail.Quantity)
-		sumPrice += detail.GetTotalPrice()
+		detail.TotalPrice = (detail.GetPrice() * float64(detail.Quantity)) - detail.DiscAmount
+		sumPrice += detail.TotalPrice
 
 		if len(detail.GetId()) > 0 {
 			for index, data := range purchaseModel.Pb.GetDetails() {
@@ -241,6 +241,7 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 
 					var purchaseDetailModel model.PurchaseDetail
 					purchaseDetailModel.SetPbFromPointer(data)
+
 					if err := purchaseDetailModel.Update(ctx, tx); err != nil {
 						tx.Rollback()
 						return &purchaseModel.Pb, err
@@ -257,12 +258,12 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 					ProductCode:    mProduct.Pb.GetCode(),
 					ProductName:    mProduct.Pb.GetName(),
 					Price:          detail.GetPrice(),
+					Quantity:       detail.GetQuantity(),
 					DiscAmount:     detail.GetDiscAmount(),
 					DiscPercentage: detail.GetDiscPercentage(),
 					TotalPrice:     detail.GetTotalPrice(),
 				},
 			}
-
 			err = purchaseDetailModel.Create(ctx, tx)
 			if err != nil {
 				tx.Rollback()
