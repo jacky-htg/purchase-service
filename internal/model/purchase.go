@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"purchase/internal/pkg/app"
+	"purchase/internal/pkg/util"
 	"purchase/pb/purchases"
 
 	"github.com/google/uuid"
@@ -140,22 +141,6 @@ func (u *Purchase) GetByCode(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (u *Purchase) getCode(ctx context.Context, tx *sql.Tx) (string, error) {
-	var count int
-	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM purchases 
-			WHERE company_id = $1 AND to_char(created_at, 'YYYY-mm') = to_char(now(), 'YYYY-mm')`,
-		ctx.Value(app.Ctx("companyID")).(string)).Scan(&count)
-
-	if err != nil {
-		return "", status.Error(codes.Internal, err.Error())
-	}
-
-	return fmt.Sprintf("PC%d%d%d",
-		time.Now().UTC().Year(),
-		int(time.Now().UTC().Month()),
-		(count + 1)), nil
-}
-
 func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 	u.Pb.Id = uuid.New().String()
 	now := time.Now().UTC()
@@ -166,7 +151,7 @@ func (u *Purchase) Create(ctx context.Context, tx *sql.Tx) error {
 		return status.Errorf(codes.Internal, "convert Date: %v", err)
 	}
 
-	u.Pb.Code, err = u.getCode(ctx, tx)
+	u.Pb.Code, err = util.GetCode(ctx, tx, "purchases", "PC")
 	if err != nil {
 		return err
 	}
@@ -372,14 +357,14 @@ func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB, purchaseRe
 	queryReturn += ` GROUP BY purchase_return_details.product_id`
 
 	query := `
-		SELECT purchase_details.product_id, (purchase_details.quantity - purchase_returns.return_quantity) quantity 
+		SELECT purchase_details.product_id, (purchase_details.quantity - coalesce(purchase_returns.return_quantity, 0)) quantity 
 		FROM purchase_details 
 		JOIN purchases ON purchase_details.purchase_id = purchases.id
-		JOIN (
+		LEFT JOIN (
 			` + queryReturn + `
 		) AS purchase_returns ON purchase_details.product_id = purchase_returns.product_id
 		WHERE purchase_details.purchase_id = $1 
-			AND (purchase_details.quantity - purchase_returns.return_quantity) > 0		
+			AND (purchase_details.quantity - coalesce(purchase_returns.return_quantity, 0)) > 0		
 			AND purchases.company_id = $2
 	`
 
@@ -408,7 +393,7 @@ func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB, purchaseRe
 		list = append(list, &pbPurchaseDetail)
 	}
 
-	if rows.Err() == nil {
+	if rows.Err() != nil {
 		return list, status.Errorf(codes.Internal, "rows error: %v", err)
 	}
 

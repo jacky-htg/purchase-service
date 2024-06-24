@@ -23,7 +23,7 @@ type PurchaseReturn struct {
 	purchases.UnimplementedPurchaseReturnServiceServer
 }
 
-func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseReturn) (*purchases.PurchaseReturn, error) {
+func (u *PurchaseReturn) PurchaseReturnCreate(ctx context.Context, in *purchases.PurchaseReturn) (*purchases.PurchaseReturn, error) {
 	var purchaseReturnModel model.PurchaseReturn
 	var err error
 
@@ -60,6 +60,10 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	// validate outstanding purchase
 	mPurchase := model.Purchase{Pb: purchases.Purchase{Id: in.Purchase.Id}}
 	outstandingPurchaseDetails, err := mPurchase.OutstandingDetail(ctx, u.Db, nil)
+	if err != nil {
+		return &purchaseReturnModel.Pb, err
+	}
+
 	if len(outstandingPurchaseDetails) == 0 {
 		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has been returned ")
 	}
@@ -76,7 +80,7 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		if !u.validateOutstandingDetail(ctx, detail, outstandingPurchaseDetails) {
+		if !u.validateOutstandingDetail(detail, outstandingPurchaseDetails) {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid outstanding product")
 		}
 
@@ -165,7 +169,7 @@ func (u *PurchaseReturn) Create(ctx context.Context, in *purchases.PurchaseRetur
 	return &purchaseReturnModel.Pb, nil
 }
 
-func (u *PurchaseReturn) View(ctx context.Context, in *purchases.Id) (*purchases.PurchaseReturn, error) {
+func (u *PurchaseReturn) PurchaseReturnView(ctx context.Context, in *purchases.Id) (*purchases.PurchaseReturn, error) {
 	var purchaseReturnModel model.PurchaseReturn
 	var err error
 
@@ -187,7 +191,7 @@ func (u *PurchaseReturn) View(ctx context.Context, in *purchases.Id) (*purchases
 	return &purchaseReturnModel.Pb, nil
 }
 
-func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseReturn) (*purchases.PurchaseReturn, error) {
+func (u *PurchaseReturn) PurchaseReturnUpdate(ctx context.Context, in *purchases.PurchaseReturn) (*purchases.PurchaseReturn, error) {
 	var purchaseReturnModel model.PurchaseReturn
 	var err error
 
@@ -206,6 +210,10 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 	// validate not any receiving order yet
 	mReceive := model.Receive{Client: u.ReceiveClient}
 	hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.Purchase.Id)
+	if err != nil {
+		return &purchaseReturnModel.Pb, err
+	}
+
 	if hasReceive {
 		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has receive transaction ")
 	}
@@ -214,6 +222,10 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 	mPurchase := model.Purchase{Pb: purchases.Purchase{Id: in.Purchase.Id}}
 	purchaseReturnId := in.GetId()
 	outstandingPurchaseDetails, err := mPurchase.OutstandingDetail(ctx, u.Db, &purchaseReturnId)
+	if err != nil {
+		return &purchaseReturnModel.Pb, err
+	}
+
 	if len(outstandingPurchaseDetails) == 0 {
 		return &purchaseReturnModel.Pb, status.Error(codes.FailedPrecondition, "Purchase has been returned ")
 	}
@@ -239,14 +251,14 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 
 	var sumPrice float64
 	var purchaseQty, returnQty int32
-	var newDetails []*purchases.PurchaseReturnDetail
+	// var newDetails []*purchases.PurchaseReturnDetail
 	for _, detail := range in.GetDetails() {
 		if len(detail.GetProductId()) == 0 {
 			tx.Rollback()
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid product")
 		}
 
-		if !u.validateOutstandingDetail(ctx, detail, outstandingPurchaseDetails) {
+		if !u.validateOutstandingDetail(detail, outstandingPurchaseDetails) {
 			return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid outstanding product")
 		}
 
@@ -278,7 +290,7 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 				return &purchaseReturnModel.Pb, err
 			}
 
-			newDetails = append(newDetails, &purchaseReturnDetailModel.Pb)
+			// newDetails = append(newDetails, &purchaseReturnDetailModel.Pb)
 			for index, data := range purchaseReturnModel.Pb.GetDetails() {
 				if data.GetId() == detail.GetId() {
 					purchaseReturnModel.Pb.Details = append(purchaseReturnModel.Pb.Details[:index], purchaseReturnModel.Pb.Details[index+1:]...)
@@ -335,7 +347,7 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 				return &purchaseReturnModel.Pb, err
 			}
 
-			newDetails = append(newDetails, &purchaseReturnDetailModel.Pb)
+			// newDetails = append(newDetails, &purchaseReturnDetailModel.Pb)
 		}
 	}
 
@@ -366,7 +378,7 @@ func (u *PurchaseReturn) Update(ctx context.Context, in *purchases.PurchaseRetur
 	return &purchaseReturnModel.Pb, nil
 }
 
-func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream purchases.PurchaseReturnService_PurchaseReturnListServer) error {
+func (u *PurchaseReturn) PurchaseReturnList(in *purchases.ListPurchaseReturnRequest, stream purchases.PurchaseReturnService_PurchaseReturnListServer) error {
 	ctx := stream.Context()
 	ctx, err := app.GetMetadata(ctx)
 	if err != nil {
@@ -375,6 +387,9 @@ func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream pu
 
 	var purchaseReturnModel model.PurchaseReturn
 	query, paramQueries, paginationResponse, err := purchaseReturnModel.ListQuery(ctx, u.Db, in)
+	if err != nil {
+		return err
+	}
 
 	rows, err := u.Db.QueryContext(ctx, query, paramQueries...)
 	if err != nil {
@@ -416,7 +431,7 @@ func (u *PurchaseReturn) List(in *purchases.ListPurchaseReturnRequest, stream pu
 	return nil
 }
 
-func (u *PurchaseReturn) validateOutstandingDetail(ctx context.Context, in *purchases.PurchaseReturnDetail, outstanding []*purchases.PurchaseDetail) bool {
+func (u *PurchaseReturn) validateOutstandingDetail(in *purchases.PurchaseReturnDetail, outstanding []*purchases.PurchaseDetail) bool {
 	isValid := false
 	for _, out := range outstanding {
 		if in.ProductId == out.ProductId && in.Quantity <= out.Quantity {

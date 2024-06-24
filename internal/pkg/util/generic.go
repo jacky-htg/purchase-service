@@ -22,7 +22,7 @@ func GetCode(ctx context.Context, tx *sql.Tx, tableName string, code string) (st
 		return "", status.Error(codes.Internal, err.Error())
 	}
 
-	return fmt.Sprintf("%s%d%d%d",
+	return fmt.Sprintf("%s%d%02d%05d",
 		code,
 		time.Now().UTC().Year(),
 		int(time.Now().UTC().Month()),

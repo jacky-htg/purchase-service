@@ -20,6 +20,23 @@ type PurchaseReturn struct {
 	Pb purchases.PurchaseReturn
 }
 
+func (u *PurchaseReturn) GetByPurchaseId(ctx context.Context, db *sql.DB) error {
+	query := `SELECT id FROM purchase_returns WHERE purchase_id = $1`
+	stmt, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return status.Errorf(codes.Internal, "Prepare statement Get By purchase id: %v", err)
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRowContext(ctx, u.Pb.GetPurchase().GetId()).Scan(&u.Pb.Id)
+
+	if err != nil && err != sql.ErrNoRows {
+		return status.Errorf(codes.Internal, "Query Raw get by code purchase return: %v", err)
+	}
+
+	return nil
+}
+
 func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 	query := `
 		SELECT purchase_returns.id, purchase_returns.company_id, purchase_returns.branch_id, 
@@ -142,7 +159,7 @@ func (u *PurchaseReturn) Create(ctx context.Context, tx *sql.Tx) error {
 		return status.Errorf(codes.Internal, "convert Date: %v", err)
 	}
 
-	u.Pb.Code, err = util.GetCode(ctx, tx, "purchase_returns", "DR")
+	u.Pb.Code, err = util.GetCode(ctx, tx, "purchase_returns", "PR")
 	if err != nil {
 		return err
 	}
