@@ -40,7 +40,7 @@ func (u *PurchaseReturn) GetByPurchaseId(ctx context.Context, db *sql.DB) error 
 func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 	query := `
 		SELECT purchase_returns.id, purchase_returns.company_id, purchase_returns.branch_id, 
-			purchase_returns.branch_name, purchase_returns.purchase_id, purchase_returns.code, 
+			purchase_returns.branch_name, purchase_returns.purchase_id, purchases.code, purchase_returns.code, 
 			purchase_returns.return_date, purchase_returns.remark, 
 			purchase_returns.price, purchase_returns.additional_disc_amount, purchase_returns.additional_disc_percentage, purchase_returns.total_price,
 			purchase_returns.created_at, purchase_returns.created_by, purchase_returns.updated_at, purchase_returns.updated_by,
@@ -56,7 +56,9 @@ func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 		)) as details
 		FROM purchase_returns 
 		JOIN purchase_return_details ON purchase_returns.id = purchase_return_details.purchase_return_id
+		JOIN purchases ON purchase_returns.purchase_id = purchases.id
 		WHERE purchase_returns.id = $1
+		GROUP BY purchase_returns.id, purchases.id
 	`
 
 	stmt, err := db.PrepareContext(ctx, query)
@@ -67,9 +69,10 @@ func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 
 	var dateReturn, createdAt, updatedAt time.Time
 	var companyID, details string
+	var purchase purchases.Purchase
 	err = stmt.QueryRowContext(ctx, u.Pb.GetId()).Scan(
 		&u.Pb.Id, &companyID, &u.Pb.BranchId, &u.Pb.BranchName,
-		&u.Pb.Purchase.Id, &u.Pb.Code, &dateReturn, &u.Pb.Remark,
+		&purchase.Id, &purchase.Code, &u.Pb.Code, &dateReturn, &u.Pb.Remark,
 		&u.Pb.Price, &u.Pb.AdditionalDiscAmount, &u.Pb.AdditionalDiscPercentage, &u.Pb.TotalPrice,
 		&createdAt, &u.Pb.CreatedBy, &updatedAt, &u.Pb.UpdatedBy, &details,
 	)
@@ -89,6 +92,7 @@ func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 	u.Pb.ReturnDate = dateReturn.String()
 	u.Pb.CreatedAt = createdAt.String()
 	u.Pb.UpdatedAt = updatedAt.String()
+	u.Pb.Purchase = &purchase
 
 	detailPurchaseReturns := []struct {
 		ID               string
