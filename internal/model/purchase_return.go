@@ -97,12 +97,12 @@ func (u *PurchaseReturn) Get(ctx context.Context, db *sql.DB) error {
 	detailPurchaseReturns := []struct {
 		ID               string
 		PurchaseReturnID string
-		ProductID        string
+		ProductID        string `json:"product_id"`
 		Quantity         int32
 		Price            float64
-		DiscAmount       float64
-		DiscPercentage   float32
-		TotalPrice       float64
+		DiscAmount       float64 `json:"disc_amount"`
+		DiscPercentage   float32 `json:"disc_percentage"`
+		TotalPrice       float64 `json:"total_price"`
 	}{}
 	err = json.Unmarshal([]byte(details), &detailPurchaseReturns)
 	if err != nil {
