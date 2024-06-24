@@ -407,7 +407,9 @@ func (u *PurchaseReturn) PurchaseReturnList(in *purchases.ListPurchaseReturnRequ
 		var pbPurchaseReturn purchases.PurchaseReturn
 		var companyID string
 		var createdAt, updatedAt time.Time
+		var purchase purchases.Purchase
 		err = rows.Scan(&pbPurchaseReturn.Id, &companyID, &pbPurchaseReturn.BranchId, &pbPurchaseReturn.BranchName,
+			&purchase.Id, &purchase.Code,
 			&pbPurchaseReturn.Code, &pbPurchaseReturn.ReturnDate, &pbPurchaseReturn.Remark,
 			&pbPurchaseReturn.Price, &pbPurchaseReturn.AdditionalDiscAmount, &pbPurchaseReturn.AdditionalDiscPercentage, &pbPurchaseReturn.TotalPrice,
 			&createdAt, &pbPurchaseReturn.CreatedBy, &updatedAt, &pbPurchaseReturn.UpdatedBy)
@@ -417,6 +419,7 @@ func (u *PurchaseReturn) PurchaseReturnList(in *purchases.ListPurchaseReturnRequ
 
 		pbPurchaseReturn.CreatedAt = createdAt.String()
 		pbPurchaseReturn.UpdatedAt = updatedAt.String()
+		pbPurchaseReturn.Purchase = &purchase
 
 		res := &purchases.ListPurchaseReturnResponse{
 			Pagination:     paginationResponse,

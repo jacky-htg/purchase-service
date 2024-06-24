@@ -290,28 +290,35 @@ func (u *PurchaseReturn) Update(ctx context.Context, tx *sql.Tx) error {
 // ListQuery builder
 func (u *PurchaseReturn) ListQuery(ctx context.Context, db *sql.DB, in *purchases.ListPurchaseReturnRequest) (string, []interface{}, *purchases.PurchaseReturnPaginationResponse, error) {
 	var paginationResponse purchases.PurchaseReturnPaginationResponse
-	query := `SELECT id, company_id, branch_id, branch_name, purchase_id, code, return_date, remark, price, additional_disc_amount, additional_disc_percentage, total_price,  created_at, created_by, updated_at, updated_by FROM purchase_returns`
+	query := `
+		SELECT purchase_returns.id, purchase_returns.company_id, purchase_returns.branch_id, purchase_returns.branch_name, 
+			purchase_returns.purchase_id, purchases.code, purchase_returns.code, purchase_returns.return_date, 
+			purchase_returns.remark, purchase_returns.price, purchase_returns.additional_disc_amount, 
+			purchase_returns.additional_disc_percentage, purchase_returns.total_price,  
+			purchase_returns.created_at, purchase_returns.created_by, purchase_returns.updated_at, purchase_returns.updated_by 
+		FROM purchase_returns
+		JOIN purchases ON purchase_returns.purchase_id = purchases.id`
 
-	where := []string{"company_id = $1"}
+	where := []string{"purchase_returns.company_id = $1"}
 	paramQueries := []interface{}{ctx.Value(app.Ctx("companyID")).(string)}
 
 	if len(in.GetBranchId()) > 0 {
 		paramQueries = append(paramQueries, in.GetBranchId())
-		where = append(where, fmt.Sprintf(`branch_id = $%d`, len(paramQueries)))
+		where = append(where, fmt.Sprintf(`purchase_returns.branch_id = $%d`, len(paramQueries)))
 	}
 
 	if len(in.GetPurchaseId()) > 0 {
 		paramQueries = append(paramQueries, in.GetPurchaseId())
-		where = append(where, fmt.Sprintf(`purchase_id = $%d`, len(paramQueries)))
+		where = append(where, fmt.Sprintf(`purchase_returns.purchase_id = $%d`, len(paramQueries)))
 	}
 
 	if len(in.GetPagination().GetSearch()) > 0 {
 		paramQueries = append(paramQueries, in.GetPagination().GetSearch())
-		where = append(where, fmt.Sprintf(`(code ILIKE $%d OR remark ILIKE $%d)`, len(paramQueries), len(paramQueries)))
+		where = append(where, fmt.Sprintf(`(purchase_returns.code ILIKE $%d OR purchase_returns.remark ILIKE $%d)`, len(paramQueries), len(paramQueries)))
 	}
 
 	{
-		qCount := `SELECT COUNT(*) FROM purchase_returns`
+		qCount := `SELECT COUNT(*) FROM purchase_returns JOIN purchases ON purchase_returns.purchase_id = purchases.id`
 		if len(where) > 0 {
 			qCount += " WHERE " + strings.Join(where, " AND ")
 		}
@@ -328,11 +335,11 @@ func (u *PurchaseReturn) ListQuery(ctx context.Context, db *sql.DB, in *purchase
 		query += ` WHERE ` + strings.Join(where, " AND ")
 	}
 
-	if len(in.GetPagination().GetOrderBy()) == 0 || !(in.GetPagination().GetOrderBy() == "code") {
+	if len(in.GetPagination().GetOrderBy()) == 0 || !(in.GetPagination().GetOrderBy() == "purchase_returns.code") {
 		if in.GetPagination() == nil {
-			in.Pagination = &purchases.Pagination{OrderBy: "created_at"}
+			in.Pagination = &purchases.Pagination{OrderBy: "purchase_returns.created_at"}
 		} else {
-			in.GetPagination().OrderBy = "created_at"
+			in.GetPagination().OrderBy = "purchase_returns.created_at"
 		}
 	}
 
