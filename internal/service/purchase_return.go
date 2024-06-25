@@ -90,11 +90,11 @@ func (u *PurchaseReturn) PurchaseReturnCreate(ctx context.Context, in *purchases
 				detail.Price = p.Price
 				if p.DiscPercentage > 0 {
 					detail.DiscPercentage = p.DiscPercentage
-					detail.DiscAmount = p.GetPrice() * float64(p.DiscPercentage) / 100
-				} else if p.DiscAmount > 0 {
+					detail.DiscAmount = float64(detail.Quantity) * p.GetPrice() * float64(p.DiscPercentage) / 100
+				} /*else if p.DiscAmount > 0 {
 					detail.DiscAmount = p.DiscAmount
-				}
-				detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
+				}*/
+				detail.TotalPrice = (detail.Price * float64(detail.Quantity)) - detail.DiscAmount
 				break
 			}
 		}
@@ -121,8 +121,9 @@ func (u *PurchaseReturn) PurchaseReturnCreate(ctx context.Context, in *purchases
 
 	in.Price = sumPrice
 	if mPurchase.Pb.AdditionalDiscPercentage > 0 {
+		in.AdditionalDiscPercentage = mPurchase.Pb.AdditionalDiscPercentage
 		in.AdditionalDiscAmount = in.Price * float64(in.AdditionalDiscPercentage) / 100
-	} else if mPurchase.Pb.AdditionalDiscAmount > 0 {
+	} /*else if mPurchase.Pb.AdditionalDiscAmount > 0 {
 		additionalDiscPerQty := mPurchase.Pb.AdditionalDiscAmount / float64(purchaseQty)
 		in.AdditionalDiscAmount = additionalDiscPerQty * float64(returnQty)
 		returnAdditionalDisc, err := mPurchase.GetReturnAdditionalDisc(ctx, u.Db)
@@ -133,7 +134,7 @@ func (u *PurchaseReturn) PurchaseReturnCreate(ctx context.Context, in *purchases
 		if in.AdditionalDiscAmount > remainingAdditionalDisc {
 			in.AdditionalDiscAmount = remainingAdditionalDisc
 		}
-	}
+	}*/
 	in.TotalPrice = in.Price - in.AdditionalDiscAmount
 
 	purchaseReturnModel.Pb = purchases.PurchaseReturn{
@@ -266,12 +267,18 @@ func (u *PurchaseReturn) PurchaseReturnUpdate(ctx context.Context, in *purchases
 			for _, p := range mPurchase.Pb.GetDetails() {
 				purchaseQty += p.Quantity
 				if p.GetProductId() == detail.ProductId {
+					detail.Price = p.Price
+					if p.DiscPercentage > 0 {
+						detail.DiscPercentage = p.DiscPercentage
+						detail.DiscAmount = float64(detail.Quantity) * p.GetPrice() * float64(p.DiscPercentage) / 100
+					}
+					detail.TotalPrice = (detail.Price * float64(detail.Quantity)) - detail.DiscAmount
 					break
 				}
 			}
 
 			returnQty += detail.Quantity
-			detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
+			// detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
 			sumPrice += detail.TotalPrice
 
 			// operasi update
@@ -305,11 +312,9 @@ func (u *PurchaseReturn) PurchaseReturnUpdate(ctx context.Context, in *purchases
 					detail.Price = p.Price
 					if p.DiscPercentage > 0 {
 						detail.DiscPercentage = p.DiscPercentage
-						detail.DiscAmount = p.GetPrice() * float64(p.DiscPercentage) / 100
-					} else if p.DiscAmount > 0 {
-						detail.DiscAmount = p.DiscAmount
+						detail.DiscAmount = float64(detail.Quantity) * p.GetPrice() * float64(p.DiscPercentage) / 100
 					}
-					detail.TotalPrice = (detail.Price - detail.DiscAmount) * float64(detail.Quantity)
+					detail.TotalPrice = (detail.Price * float64(detail.Quantity)) - detail.DiscAmount
 					break
 				}
 			}
