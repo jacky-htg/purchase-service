@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"io"
-	"purchase/internal/pkg/app"
 	"purchase/pb/inventories"
 
 	"google.golang.org/grpc/codes"
@@ -15,7 +14,7 @@ type Receive struct {
 }
 
 func (u *Receive) HasTransactionByPurchase(ctx context.Context, purchaseId string) (bool, error) {
-	streamClient, err := u.Client.List(app.SetMetadata(ctx), &inventories.ListReceiveRequest{PurchaseId: purchaseId})
+	streamClient, err := u.Client.List(ctx, &inventories.ListReceiveRequest{PurchaseId: purchaseId})
 	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Purchase.HasTreansaction service: %s", err)

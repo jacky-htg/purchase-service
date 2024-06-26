@@ -357,7 +357,8 @@ func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB, purchaseRe
 	queryReturn += ` GROUP BY purchase_return_details.product_id`
 
 	query := `
-		SELECT purchase_details.product_id, (purchase_details.quantity - coalesce(purchase_returns.return_quantity, 0)) quantity 
+		SELECT purchase_details.product_id, (purchase_details.quantity - coalesce(purchase_returns.return_quantity, 0)) quantity,
+			purchase_details.price, purchase_details.disc_percentage
 		FROM purchase_details 
 		JOIN purchases ON purchase_details.purchase_id = purchases.id
 		LEFT JOIN (
@@ -385,7 +386,12 @@ func (u *Purchase) OutstandingDetail(ctx context.Context, db *sql.DB, purchaseRe
 
 	for rows.Next() {
 		var pbPurchaseDetail purchases.PurchaseDetail
-		err = rows.Scan(&pbPurchaseDetail.ProductId, &pbPurchaseDetail.Quantity)
+		err = rows.Scan(
+			&pbPurchaseDetail.ProductId,
+			&pbPurchaseDetail.Quantity,
+			&pbPurchaseDetail.Price,
+			&pbPurchaseDetail.DiscPercentage,
+		)
 		if err != nil {
 			return list, status.Errorf(codes.Internal, "scan data: %v", err)
 		}

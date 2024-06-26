@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"io"
-	"purchase/internal/pkg/app"
 	"purchase/pb/inventories"
 
 	"google.golang.org/grpc/codes"
@@ -17,7 +16,7 @@ type Product struct {
 }
 
 func (u *Product) Get(ctx context.Context) error {
-	product, err := u.Client.View(app.SetMetadata(ctx), &inventories.Id{Id: u.Id})
+	product, err := u.Client.View(ctx, &inventories.Id{Id: u.Id})
 	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {
 			err = status.Errorf(codes.Internal, "Error when calling Product.Get service: %s", err)
@@ -33,7 +32,7 @@ func (u *Product) Get(ctx context.Context) error {
 
 func (u *Product) List(ctx context.Context, in *inventories.ListProductRequest) ([]*inventories.ListProductResponse, error) {
 	var response []*inventories.ListProductResponse
-	streamClient, err := u.Client.List(app.SetMetadata(ctx), in)
+	streamClient, err := u.Client.List(ctx, in)
 
 	if s, ok := status.FromError(err); !ok {
 		if s.Code() == codes.Unknown {

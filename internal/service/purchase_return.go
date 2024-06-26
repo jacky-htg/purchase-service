@@ -41,11 +41,6 @@ func (u *PurchaseReturn) PurchaseReturnCreate(ctx context.Context, in *purchases
 		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid date")
 	}
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseReturnModel.Pb, err
-	}
-
 	// validate not any receiving order yet
 	mReceive := model.Receive{Client: u.ReceiveClient}
 	hasReceive, err := mReceive.HasTransactionByPurchase(ctx, in.Purchase.Id)
@@ -179,11 +174,6 @@ func (u *PurchaseReturn) PurchaseReturnView(ctx context.Context, in *purchases.I
 	}
 	purchaseReturnModel.Pb.Id = in.GetId()
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseReturnModel.Pb, err
-	}
-
 	err = purchaseReturnModel.Get(ctx, u.Db)
 	if err != nil {
 		return &purchaseReturnModel.Pb, err
@@ -202,11 +192,6 @@ func (u *PurchaseReturn) PurchaseReturnUpdate(ctx context.Context, in *purchases
 		return &purchaseReturnModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid id")
 	}
 	purchaseReturnModel.Pb.Id = in.GetId()
-
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseReturnModel.Pb, err
-	}
 
 	// validate not any receiving order yet
 	mReceive := model.Receive{Client: u.ReceiveClient}
@@ -385,11 +370,6 @@ func (u *PurchaseReturn) PurchaseReturnUpdate(ctx context.Context, in *purchases
 
 func (u *PurchaseReturn) PurchaseReturnList(in *purchases.ListPurchaseReturnRequest, stream purchases.PurchaseReturnService_PurchaseReturnListServer) error {
 	ctx := stream.Context()
-	ctx, err := app.GetMetadata(ctx)
-	if err != nil {
-		return err
-	}
-
 	var purchaseReturnModel model.PurchaseReturn
 	query, paramQueries, paginationResponse, err := purchaseReturnModel.ListQuery(ctx, u.Db, in)
 	if err != nil {

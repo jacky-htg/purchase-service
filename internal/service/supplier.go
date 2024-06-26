@@ -34,11 +34,6 @@ func (u *Supplier) SupplierCreate(ctx context.Context, in *purchases.Supplier) (
 		return &supplierModel.Pb, status.Error(codes.InvalidArgument, "Please supply valid phone")
 	}
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &supplierModel.Pb, err
-	}
-
 	// code validation
 	{
 		if len(in.GetCode()) == 0 {
@@ -82,11 +77,6 @@ func (u *Supplier) SupplierUpdate(ctx context.Context, in *purchases.Supplier) (
 	}
 	supplierModel.Pb.Id = in.GetId()
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &supplierModel.Pb, err
-	}
-
 	err = supplierModel.Get(ctx, u.Db)
 	if err != nil {
 		return &supplierModel.Pb, err
@@ -121,11 +111,6 @@ func (u *Supplier) SupplierView(ctx context.Context, in *purchases.Id) (*purchas
 	}
 	supplierModel.Pb.Id = in.GetId()
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &supplierModel.Pb, err
-	}
-
 	err = supplierModel.Get(ctx, u.Db)
 	if err != nil {
 		return &supplierModel.Pb, err
@@ -146,11 +131,6 @@ func (u *Supplier) SupplierDelete(ctx context.Context, in *purchases.Id) (*purch
 	}
 	supplierModel.Pb.Id = in.GetId()
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &output, err
-	}
-
 	err = supplierModel.Get(ctx, u.Db)
 	if err != nil {
 		return &output, err
@@ -167,11 +147,6 @@ func (u *Supplier) SupplierDelete(ctx context.Context, in *purchases.Id) (*purch
 
 func (u *Supplier) SupplierList(in *purchases.ListSupplierRequest, stream purchases.SupplierService_SupplierListServer) error {
 	ctx := stream.Context()
-	ctx, err := app.GetMetadata(ctx)
-	if err != nil {
-		return err
-	}
-
 	var supplierModel model.Supplier
 	query, paramQueries, paginationResponse, err := supplierModel.ListQuery(ctx, u.Db, in.Pagination)
 	if err != nil {

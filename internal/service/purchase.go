@@ -31,11 +31,6 @@ func (u *Purchase) PurchaseCreate(ctx context.Context, in *purchases.Purchase) (
 
 	// TODO : if this month any closing account, create transaction for this month will be blocked
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseModel.Pb, err
-	}
-
 	products, err := u.createValidation(ctx, in)
 	if err != nil {
 		return &purchaseModel.Pb, err
@@ -129,11 +124,6 @@ func (u *Purchase) PurchaseUpdate(ctx context.Context, in *purchases.Purchase) (
 		} else if hasReturn {
 			return &purchaseModel.Pb, status.Error(codes.PermissionDenied, "Can not updated because the purchase has return transaction")
 		}
-	}
-
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseModel.Pb, err
 	}
 
 	// if any receiving transaction, do update will be blocked
@@ -313,11 +303,6 @@ func (u *Purchase) PurchaseView(ctx context.Context, in *purchases.Id) (*purchas
 	}
 	purchaseModel.Pb.Id = in.GetId()
 
-	ctx, err = app.GetMetadata(ctx)
-	if err != nil {
-		return &purchaseModel.Pb, err
-	}
-
 	err = purchaseModel.Get(ctx, u.Db)
 	if err != nil {
 		return &purchaseModel.Pb, err
@@ -339,11 +324,6 @@ func (u *Purchase) PurchaseView(ctx context.Context, in *purchases.Id) (*purchas
 
 func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purchases.PurchaseService_PurchaseListServer) error {
 	ctx := stream.Context()
-	ctx, err := app.GetMetadata(ctx)
-	if err != nil {
-		return err
-	}
-
 	var purchaseModel model.Purchase
 	query, paramQueries, paginationResponse, err := purchaseModel.ListQuery(ctx, u.Db, in)
 	if err != nil {
@@ -391,6 +371,51 @@ func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purcha
 		}
 	}
 	return nil
+}
+
+func (u *Purchase) GetOutstandingPurchaseDetails(ctx context.Context, in *purchases.Id) (*purchases.OutstandingPurchaseDetails, error) {
+	var output purchases.OutstandingPurchaseDetails
+	{
+		mPurchase := model.Purchase{
+			Pb: purchases.Purchase{Id: in.Id},
+		}
+		var returnId *string
+		details, err := mPurchase.OutstandingDetail(ctx, u.Db, returnId)
+		if err != nil {
+			return &output, err
+		}
+
+		output.Detail = append(output.Detail, details...)
+	}
+
+	{
+		mProduct := model.Product{
+			Client: u.ProductClient,
+			Pb:     &inventories.Product{},
+		}
+
+		var productIds []string
+		for _, v := range output.Detail {
+			productIds = append(productIds, v.ProductId)
+		}
+
+		inProductList := inventories.ListProductRequest{
+			Ids: productIds,
+		}
+		products, err := mProduct.List(ctx, &inProductList)
+		if err != nil {
+			return &output, err
+		}
+
+		for i, d := range output.Detail {
+			for _, v := range products {
+				if v.Product.Id == d.ProductId {
+					output.Detail[i].ProductName = v.Product.Name
+				}
+			}
+		}
+	}
+	return &output, nil
 }
 
 func (u *Purchase) createValidation(ctx context.Context, in *purchases.Purchase) ([]*inventories.ListProductResponse, error) {
