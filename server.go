@@ -7,6 +7,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"purchase/internal/config"
 	"purchase/internal/middleware"
@@ -59,13 +60,13 @@ func main() {
 
 	grpcServer := grpc.NewServer(serverOptions...)
 
-	userConn, err := grpc.Dial(os.Getenv("USER_SERVICE"), grpc.WithInsecure())
+	userConn, err := grpc.NewClient(os.Getenv("USER_SERVICE"), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("create user service connection: %v", err)
 	}
 	defer userConn.Close()
 
-	inventoryConn, err := grpc.Dial(os.Getenv("INVENTORY_SERVICE"), grpc.WithInsecure())
+	inventoryConn, err := grpc.NewClient(os.Getenv("INVENTORY_SERVICE"), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("create inventory service connection: %v", err)
 	}
