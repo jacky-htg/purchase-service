@@ -373,13 +373,16 @@ func (u *Purchase) PurchaseList(in *purchases.ListPurchaseRequest, stream purcha
 	return nil
 }
 
-func (u *Purchase) GetOutstandingPurchaseDetails(ctx context.Context, in *purchases.Id) (*purchases.OutstandingPurchaseDetails, error) {
+func (u *Purchase) GetOutstandingPurchaseDetails(ctx context.Context, in *purchases.OutstandingPurchaseRequest) (*purchases.OutstandingPurchaseDetails, error) {
 	var output purchases.OutstandingPurchaseDetails
 	{
 		mPurchase := model.Purchase{
 			Pb: purchases.Purchase{Id: in.Id},
 		}
 		var returnId *string
+		if len(in.ReturnId) > 0 {
+			returnId = &in.ReturnId
+		}
 		details, err := mPurchase.OutstandingDetail(ctx, u.Db, returnId)
 		if err != nil {
 			return &output, err
