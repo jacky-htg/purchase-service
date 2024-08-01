@@ -3,10 +3,10 @@ package model
 import (
 	"context"
 	"database/sql"
-	"purchase/internal/pkg/app"
-	"purchase/pb/purchases"
 
 	"github.com/google/uuid"
+	"github.com/jacky-htg/erp-pkg/app"
+	"github.com/jacky-htg/erp-proto/go/pb/purchases"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

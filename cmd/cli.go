@@ -6,11 +6,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/jacky-htg/erp-pkg/db/postgres"
+	"github.com/jacky-htg/purchase-service/internal/config"
+	"github.com/jacky-htg/purchase-service/internal/schema"
 	_ "github.com/lib/pq"
-
-	"purchase/internal/config"
-	"purchase/internal/pkg/db/postgres"
-	"purchase/internal/schema"
 )
 
 func main() {
@@ -23,7 +22,7 @@ func main() {
 		}
 	}
 
-	log := log.New(os.Stdout, "grpc skeleton : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
+	log := log.New(os.Stdout, "ERROR : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
 	if err := run(log); err != nil {
 		log.Printf("error: shutting down: %s", err)
 		os.Exit(1)

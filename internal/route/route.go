@@ -2,17 +2,17 @@ package route
 
 import (
 	"database/sql"
-	"purchase/internal/service"
-	"purchase/pb/inventories"
-	"purchase/pb/purchases"
-	"purchase/pb/users"
+	"log"
 
-	"github.com/sirupsen/logrus"
+	"github.com/jacky-htg/erp-proto/go/pb/inventories"
+	"github.com/jacky-htg/erp-proto/go/pb/purchases"
+	"github.com/jacky-htg/erp-proto/go/pb/users"
+	"github.com/jacky-htg/purchase-service/internal/service"
 	"google.golang.org/grpc"
 )
 
 // GrpcRoute func
-func GrpcRoute(grpcServer *grpc.Server, db *sql.DB, log *logrus.Entry, userConn *grpc.ClientConn, inventoryConn *grpc.ClientConn) {
+func GrpcRoute(grpcServer *grpc.Server, db *sql.DB, log *log.Logger, userConn *grpc.ClientConn, inventoryConn *grpc.ClientConn) {
 	purchaseServer := service.Purchase{
 		Db:            db,
 		UserClient:    users.NewUserServiceClient((userConn)),

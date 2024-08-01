@@ -5,10 +5,9 @@ import (
 	"database/sql"
 	"time"
 
-	"purchase/internal/model"
-	"purchase/internal/pkg/app"
-	"purchase/pb/purchases"
-
+	"github.com/jacky-htg/erp-pkg/app"
+	"github.com/jacky-htg/erp-proto/go/pb/purchases"
+	"github.com/jacky-htg/purchase-service/internal/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

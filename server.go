@@ -1,19 +1,18 @@
 package main
 
 import (
+	"log"
 	"net"
 	"os"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/jacky-htg/erp-pkg/db/postgres"
+	"github.com/jacky-htg/purchase-service/internal/config"
+	"github.com/jacky-htg/purchase-service/internal/middleware"
+	"github.com/jacky-htg/purchase-service/internal/route"
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	"purchase/internal/config"
-	"purchase/internal/middleware"
-	"purchase/internal/pkg/db/postgres"
-	"purchase/internal/pkg/log/logruslog"
-	"purchase/internal/route"
 )
 
 const defaultPort = "8002"
@@ -30,15 +29,14 @@ func main() {
 	}
 
 	// init log
-	log := logruslog.Init()
+	log := log.New(os.Stdout, "ERROR : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
 
 	// create postgres database connection
 	db, err := postgres.Open()
 	if err != nil {
-		log.Errorf("connecting to db: %v", err)
+		log.Fatalf("connecting to db: %v", err)
 		return
 	}
-	log.Info("connecting to postgresql database")
 
 	defer db.Close()
 
@@ -79,5 +77,4 @@ func main() {
 		log.Fatalf("failed to serve: %s", err)
 		return
 	}
-	log.Info("serve grpc on port: " + port)
 }

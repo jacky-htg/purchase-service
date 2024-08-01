@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"purchase/internal/pkg/app"
-	"purchase/internal/pkg/util"
-	"purchase/pb/purchases"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jacky-htg/erp-pkg/app"
+	"github.com/jacky-htg/erp-pkg/util"
+	"github.com/jacky-htg/erp-proto/go/pb/purchases"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

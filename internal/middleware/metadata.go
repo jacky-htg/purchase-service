@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"context"
-	"purchase/internal/pkg/app"
 
+	"github.com/jacky-htg/erp-pkg/app"
 	"google.golang.org/grpc"
 )
 
